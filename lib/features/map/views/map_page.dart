@@ -1,0 +1,315 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../observation/models/observation_model.dart';
+import '../viewmodels/map_viewmodel.dart';
+import '../widgets/map_filter_sheet.dart';
+import '../widgets/map_markers.dart';
+import '../widgets/map_search_bar.dart';
+import '../widgets/observation_preview_card.dart';
+
+/// Tọa độ fallback khi chưa xác định được vị trí user và chưa có
+/// Observation nào để tự căn giữa bản đồ — trung tâm địa lý Việt Nam.
+/// Chỉ dùng tạm lúc khởi động, sẽ bị thay ngay khi có dữ liệu thật.
+const _fallbackCenter = LatLng(16.0471, 108.2062);
+const _fallbackZoom = 5.0;
+
+class MapPage extends ConsumerStatefulWidget {
+  const MapPage({super.key});
+
+  @override
+  ConsumerState<MapPage> createState() => _MapPageState();
+}
+
+class _MapPageState extends ConsumerState<MapPage> {
+  final _mapController = MapController();
+  final _searchController = TextEditingController();
+
+  LatLng? _userLocation;
+  bool _hasCenteredOnData = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchUserLocation());
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Lấy vị trí user một cách "best-effort" — không chặn hay báo lỗi ồn
+  /// ào nếu thất bại, vì trên Map việc có vị trí chỉ là tiện ích thêm
+  /// (định vị "Vị trí của tôi", tính khoảng cách), không bắt buộc như ở
+  /// Create Observation.
+  Future<void> _fetchUserLocation({bool moveCamera = true}) async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+      if (!mounted) return;
+
+      final latLng = LatLng(position.latitude, position.longitude);
+      setState(() => _userLocation = latLng);
+
+      if (moveCamera) {
+        _mapController.move(latLng, 14);
+      }
+    } catch (_) {
+      // Nuốt lỗi có chủ đích — xem docstring ở trên.
+    }
+  }
+
+  void _centerOnDataIfNeeded(List<ObservationModel> observations) {
+    if (_hasCenteredOnData || _userLocation != null || observations.isEmpty) {
+      return;
+    }
+    _hasCenteredOnData = true;
+
+    final avgLat = observations.map((o) => o.latitude).reduce((a, b) => a + b) /
+        observations.length;
+    final avgLng =
+        observations.map((o) => o.longitude).reduce((a, b) => a + b) /
+            observations.length;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _mapController.move(LatLng(avgLat, avgLng), 12);
+    });
+  }
+
+  void _openFilterSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const MapFilterSheet(),
+    );
+  }
+
+  void _showPreview(ObservationModel observation) {
+    double? distance;
+    if (_userLocation != null) {
+      distance = Geolocator.distanceBetween(
+        _userLocation!.latitude,
+        _userLocation!.longitude,
+        observation.latitude,
+        observation.longitude,
+      );
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => ObservationPreviewCard(
+        observation: observation,
+        distanceInMeters: distance,
+        onTap: () {
+          Navigator.pop(context);
+          context.push('/observation/${observation.id}');
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final observations = ref.watch(filteredMapObservationsProvider);
+    final filter = ref.watch(mapFilterProvider);
+
+    _centerOnDataIfNeeded(observations);
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _fallbackCenter,
+              initialZoom: _fallbackZoom,
+              minZoom: 3,
+              maxZoom: 19,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                // TODO: đổi thành đúng applicationId của app (trong
+                // android/app/build.gradle) trước khi phát hành thật —
+                // OSM dùng giá trị này để theo dõi tải, không bắt buộc
+                // chính xác tuyệt đối để chạy demo/đồ án.
+                userAgentPackageName: 'com.example.urban_archaeology',
+                maxZoom: 19,
+                // Tạm thời thêm để debug — in lỗi thật ra console thay vì
+                // chỉ hiện nền xám im lặng. Sau khi xác định xong nguyên
+                // nhân có thể bỏ lại (không bắt buộc phải giữ).
+                errorTileCallback: (tile, error, stackTrace) {
+                  debugPrint('❌ Tile load error: $error');
+                },
+              ),
+              MarkerClusterLayerWidget(
+                options: MarkerClusterLayerOptions(
+                  maxClusterRadius: 50,
+                  size: const Size(40, 40),
+                  zoomToBoundsOnClick: true,
+                  spiderfyCluster: true,
+                  polygonOptions: PolygonOptions(
+                    borderColor: Colors.transparent,
+                    color: Colors.transparent,
+                    borderStrokeWidth: 0,
+                  ),
+                  markers: observations.map((o) {
+                    return Marker(
+                      point: LatLng(o.latitude, o.longitude),
+                      width: 40,
+                      height: 40,
+                      child: GestureDetector(
+                        onTap: () => _showPreview(o),
+                        child: ObservationMarkerIcon(observation: o),
+                      ),
+                    );
+                  }).toList(),
+                  builder: (context, markers) =>
+                      ClusterBubble(count: markers.length),
+                ),
+              ),
+              if (_userLocation != null)
+                MarkerLayer(markers: [
+                  Marker(
+                    point: _userLocation!,
+                    width: 22,
+                    height: 22,
+                    child: const _UserLocationDot(),
+                  ),
+                ]),
+            ],
+          ),
+
+          // Attribution bắt buộc theo license OpenStreetMap (ODbL).
+          Positioned(
+            left: 8,
+            bottom: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              color: Colors.white.withOpacity(0.75),
+              child: const Text(
+                '© OpenStreetMap contributors',
+                style: TextStyle(fontSize: 9, color: Colors.black87),
+              ),
+            ),
+          ),
+
+          // Search bar + filter
+          Positioned(
+            top: 8,
+            left: 16,
+            right: 16,
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  MapSearchBar(
+                    controller: _searchController,
+                    onChanged: (v) =>
+                        ref.read(mapFilterProvider.notifier).setQuery(v),
+                    onFilterTap: _openFilterSheet,
+                    hasActiveFilters: filter.selectedCategoryIds.isNotEmpty,
+                  ),
+                  if (filter.hasActiveFilters && observations.isEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: const Text(
+                        'Không tìm thấy Observation phù hợp với bộ lọc.',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+          // My Location + Create FAB
+          Positioned(
+            right: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+            child: Column(
+              children: [
+                FloatingActionButton(
+                  heroTag: 'my_location',
+                  mini: true,
+                  backgroundColor: AppColors.surfaceLight,
+                  foregroundColor: AppColors.primaryDark,
+                  onPressed: () => _fetchUserLocation(moveCamera: true),
+                  child: const Icon(Icons.my_location),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'create_observation',
+                  onPressed: () => context.push('/create-observation'),
+                  icon: const Icon(Icons.add_a_photo_outlined),
+                  label: const Text('Ghi nhận'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UserLocationDot extends StatelessWidget {
+  const _UserLocationDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.info,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.info.withOpacity(0.4),
+            blurRadius: 8,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+    );
+  }
+}

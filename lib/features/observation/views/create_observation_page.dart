@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
+import '../../gamification/widgets/gamification_dialogs.dart';
 import '../services/category_service.dart';
 import '../viewmodels/create_observation_viewmodel.dart';
 import '../widgets/photo_picker_section.dart';
@@ -65,7 +66,8 @@ class CreateObservationPage extends ConsumerWidget {
               child: const Text('Tiếp tục sửa')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hủy bỏ', style: TextStyle(color: AppColors.error)),
+            child:
+                const Text('Hủy bỏ', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -88,7 +90,8 @@ class _StepProgress extends StatelessWidget {
           final active = i <= currentStep;
           return Expanded(
             child: Container(
-              margin: EdgeInsets.only(right: i == _stepTitles.length - 1 ? 0 : 6),
+              margin:
+                  EdgeInsets.only(right: i == _stepTitles.length - 1 ? 0 : 6),
               height: 4,
               decoration: BoxDecoration(
                 color: active
@@ -182,12 +185,21 @@ class _PrimaryStepButton extends ConsumerWidget {
               if (!context.mounted) return;
 
               if (id != null) {
+                final result = ref
+                    .read(createObservationViewModelProvider)
+                    .gamificationResult;
+                if (result != null) {
+                  await showGamificationCelebrations(context, result);
+                }
+                if (!context.mounted) return;
                 context.pushReplacement('/observation/$id');
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      ref.read(createObservationViewModelProvider).submitError ??
+                      ref
+                              .read(createObservationViewModelProvider)
+                              .submitError ??
                           'Có lỗi xảy ra, vui lòng thử lại.',
                     ),
                   ),
@@ -222,7 +234,8 @@ class _PhotosStep extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: [
-        Text('Ghi lại bằng hình ảnh', style: Theme.of(context).textTheme.titleLarge),
+        Text('Ghi lại bằng hình ảnh',
+            style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 4),
         Text(
           'Chụp hoặc chọn tối thiểu 1 ảnh, tối đa '
@@ -327,7 +340,9 @@ class _LocationStepState extends State<_LocationStep> {
                     ? null
                     : widget.viewModel.fetchCurrentLocation,
                 icon: const Icon(Icons.my_location, size: 18),
-                label: Text(state.hasLocation ? 'Lấy lại vị trí' : 'Lấy vị trí hiện tại'),
+                label: Text(state.hasLocation
+                    ? 'Lấy lại vị trí'
+                    : 'Lấy vị trí hiện tại'),
               ),
             ],
           ),
@@ -356,8 +371,7 @@ class _InfoStepState extends ConsumerState<_InfoStep> {
   // quan trọng để không làm gãy việc gõ dấu tiếng Việt (IME composing).
   // Nếu tạo TextEditingController mới mỗi build, con trỏ và trạng thái
   // gõ dở dang (vd đang gõ "ơ" bằng phím w) có thể bị mất giữa chừng.
-  late final _titleController =
-      TextEditingController(text: widget.state.title);
+  late final _titleController = TextEditingController(text: widget.state.title);
   late final _descriptionController =
       TextEditingController(text: widget.state.description);
 
@@ -379,7 +393,6 @@ class _InfoStepState extends ConsumerState<_InfoStep> {
         Text('Mô tả phát hiện của bạn',
             style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 20),
-
         TextField(
           controller: _titleController,
           maxLength: AppConstants.titleMaxLength,
@@ -398,7 +411,6 @@ class _InfoStepState extends ConsumerState<_InfoStep> {
           onChanged: viewModel.setDescription,
         ),
         const SizedBox(height: 16),
-
         Text('Danh mục *', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         categoriesAsync.when(
@@ -431,7 +443,6 @@ class _InfoStepState extends ConsumerState<_InfoStep> {
           error: (e, _) => Text('Lỗi tải danh mục: $e'),
         ),
         const SizedBox(height: 20),
-
         Text('Tag', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         TagInput(
@@ -440,7 +451,6 @@ class _InfoStepState extends ConsumerState<_InfoStep> {
           onRemove: viewModel.removeTag,
         ),
         const SizedBox(height: 20),
-
         Text('Độ hiếm', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(
@@ -463,8 +473,8 @@ class _InfoStepState extends ConsumerState<_InfoStep> {
           }).toList(),
         ),
         const SizedBox(height: 20),
-
-        Text('Thời điểm quan sát', style: Theme.of(context).textTheme.titleSmall),
+        Text('Thời điểm quan sát',
+            style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: () async {
@@ -555,7 +565,8 @@ class _ReviewStep extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: [
-        Text('Xem lại trước khi đăng', style: Theme.of(context).textTheme.titleLarge),
+        Text('Xem lại trước khi đăng',
+            style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 20),
         if (state.photos.isNotEmpty)
           ClipRRect(
@@ -569,7 +580,8 @@ class _ReviewStep extends StatelessWidget {
         Text(state.title, style: Theme.of(context).textTheme.headlineSmall),
         if (state.description.trim().isNotEmpty) ...[
           const SizedBox(height: 6),
-          Text(state.description, style: Theme.of(context).textTheme.bodyMedium),
+          Text(state.description,
+              style: Theme.of(context).textTheme.bodyMedium),
         ],
         const SizedBox(height: 14),
         _ReviewRow(
@@ -609,7 +621,8 @@ class _ReviewStep extends StatelessWidget {
           ),
         if (state.submitError != null) ...[
           const SizedBox(height: 16),
-          Text(state.submitError!, style: const TextStyle(color: AppColors.error)),
+          Text(state.submitError!,
+              style: const TextStyle(color: AppColors.error)),
         ],
       ],
     );

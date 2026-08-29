@@ -95,14 +95,118 @@ class DefaultCategories {
   DefaultCategories._();
 
   static const List<Map<String, String>> seed = [
-    {'icon': '🪧', 'name': 'Sign / Advertisement'},
     {'icon': '🏛️', 'name': 'Architecture'},
-    {'icon': '🏪', 'name': 'Commercial Trace'},
-    {'icon': '🧱', 'name': 'Urban Structure'},
-    {'icon': '🏚️', 'name': 'Abandoned'},
-    {'icon': '🚪', 'name': 'Door / Window'},
-    {'icon': '🛠️', 'name': 'Infrastructure'},
+    {'icon': '🏚️', 'name': 'Forgotten Place'},
+    {'icon': '🧱', 'name': 'Urban Trace'},
+    {'icon': '🛣️', 'name': 'Infrastructure'},
+    {'icon': '🏺', 'name': 'Cultural & Historical'},
+    {'icon': '🎨', 'name': 'Street Art'},
+    {'icon': '🏪', 'name': 'Local Life'},
+    {'icon': '🌿', 'name': 'Hidden Nature'},
+    {'icon': '🌆', 'name': 'Scenic & Atmospheric'},
     {'icon': '✨', 'name': 'Interesting Place'},
     {'icon': '📦', 'name': 'Other'},
+  ];
+}
+
+// 🏛️ Architecture
+// 🏚️ Forgotten Place
+// 🧱 Urban Remnant
+// 🛣️ Infrastructure
+// 🏪 Commercial Trace
+// 🎨 Street Art & Markings
+// 🏺 Cultural Trace
+// ✨ Interesting Place
+
+// 🏛️ Architecture
+// 🏚️ Forgotten Place
+// 🧱 Urban Trace
+// 🛣️ Infrastructure
+// 🏺 Cultural & Historical
+// 🎨 Street Art
+// 🏪 Local Life
+// 🌿 Hidden Nature
+// 🌆 Scenic & Atmospheric
+// ✨ Interesting Place
+// 📦 Other
+
+/// Danh sách Achievement mặc định (Phase 5) — cùng logic seed-1-lần
+/// như DefaultCategories: AchievementService ghi các document này vào
+/// Firestore đúng 1 lần qua nút "Khởi tạo Achievement mặc định", sau
+/// đó app đọc từ Firestore như bình thường.
+///
+/// `conditionType` khớp với AchievementConditionType trong
+/// achievement_model.dart. `conditionValue`:
+/// - observationCount/expeditionCount: số lượng tối thiểu
+/// - rarityFound: rank tối thiểu (0=common, 1=uncommon, 2=rare, 3=very_rare)
+/// - totalDistance: mét tối thiểu
+class DefaultAchievements {
+  DefaultAchievements._();
+
+  static const List<Map<String, dynamic>> seed = [
+    {
+      'name': 'Người mới bắt đầu',
+      'description': 'Tạo Observation đầu tiên của bạn',
+      'icon': '🎉',
+      'xpReward': 20,
+      'conditionType': 'observationCount',
+      'conditionValue': 1,
+    },
+    {
+      'name': 'Nhà khảo cổ tập sự',
+      'description': 'Tạo 10 Observation',
+      'icon': '🔍',
+      'xpReward': 50,
+      'conditionType': 'observationCount',
+      'conditionValue': 10,
+    },
+    {
+      'name': 'Nhà khảo cổ kỳ cựu',
+      'description': 'Tạo 50 Observation',
+      'icon': '🏆',
+      'xpReward': 150,
+      'conditionType': 'observationCount',
+      'conditionValue': 50,
+    },
+    {
+      'name': 'Bước chân đầu tiên',
+      'description': 'Hoàn thành chuyến thám hiểm đầu tiên',
+      'icon': '🥾',
+      'xpReward': 20,
+      'conditionType': 'expeditionCount',
+      'conditionValue': 1,
+    },
+    {
+      'name': 'Người lữ hành',
+      'description': 'Hoàn thành 10 chuyến thám hiểm',
+      'icon': '🧭',
+      'xpReward': 100,
+      'conditionType': 'expeditionCount',
+      'conditionValue': 10,
+    },
+    {
+      'name': 'Săn đồ hiếm',
+      'description': 'Tìm được 1 phát hiện độ hiếm Rare trở lên',
+      'icon': '💎',
+      'xpReward': 50,
+      'conditionType': 'rarityFound',
+      'conditionValue': 2,
+    },
+    {
+      'name': 'Săn đồ huyền thoại',
+      'description': 'Tìm được 1 phát hiện Very Rare',
+      'icon': '✨',
+      'xpReward': 100,
+      'conditionType': 'rarityFound',
+      'conditionValue': 3,
+    },
+    {
+      'name': 'Nhà thám hiểm đường dài',
+      'description': 'Đi bộ tổng cộng 5km qua các chuyến thám hiểm',
+      'icon': '🚶',
+      'xpReward': 80,
+      'conditionType': 'totalDistance',
+      'conditionValue': 5000,
+    },
   ];
 }

@@ -28,6 +28,19 @@ class UserModel {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  /// Danh sách id các Achievement đã mở khóa (Phase 5) — lưu trực tiếp
+  /// làm array field trên User document, không tách entity riêng, theo
+  /// đúng hướng "giữ đơn giản" đã áp dụng cho Tag.
+  final List<String> unlockedAchievementIds;
+
+  /// Tổng quãng đường đã đi qua tất cả Expedition (mét) — dùng cho
+  /// Achievement dạng "đi bộ tổng X km".
+  final double totalDistanceMeters;
+
+  /// Rarity cao nhất từng tìm được (Phase 5) — dùng cho Achievement
+  /// dạng "tìm được 1 phát hiện Rare trở lên".
+  final String bestRarityFound;
+
   const UserModel({
     required this.id,
     required this.username,
@@ -45,6 +58,9 @@ class UserModel {
     this.followingCount = 0,
     required this.createdAt,
     required this.updatedAt,
+    this.unlockedAchievementIds = const [],
+    this.totalDistanceMeters = 0,
+    this.bestRarityFound = 'common',
   });
 
   /// Tạo UserModel mới khi user vừa đăng ký — mọi số liệu bắt đầu từ 0.
@@ -83,6 +99,11 @@ class UserModel {
       followingCount: (map['followingCount'] as num?)?.toInt() ?? 0,
       createdAt: _timestampToDate(map['createdAt']),
       updatedAt: _timestampToDate(map['updatedAt']),
+      unlockedAchievementIds:
+          List<String>.from(map['unlockedAchievementIds'] as List? ?? []),
+      totalDistanceMeters:
+          (map['totalDistanceMeters'] as num?)?.toDouble() ?? 0,
+      bestRarityFound: map['bestRarityFound'] as String? ?? 'common',
     );
   }
 
@@ -107,6 +128,9 @@ class UserModel {
       'followingCount': followingCount,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'unlockedAchievementIds': unlockedAchievementIds,
+      'totalDistanceMeters': totalDistanceMeters,
+      'bestRarityFound': bestRarityFound,
     };
   }
 
@@ -124,6 +148,9 @@ class UserModel {
     int? followerCount,
     int? followingCount,
     DateTime? updatedAt,
+    List<String>? unlockedAchievementIds,
+    double? totalDistanceMeters,
+    String? bestRarityFound,
   }) {
     return UserModel(
       id: id,
@@ -142,6 +169,10 @@ class UserModel {
       followingCount: followingCount ?? this.followingCount,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
+      unlockedAchievementIds:
+          unlockedAchievementIds ?? this.unlockedAchievementIds,
+      totalDistanceMeters: totalDistanceMeters ?? this.totalDistanceMeters,
+      bestRarityFound: bestRarityFound ?? this.bestRarityFound,
     );
   }
 

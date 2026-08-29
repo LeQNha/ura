@@ -111,10 +111,48 @@ class HomeFeedPage extends ConsumerWidget {
                   style: const TextStyle(fontSize: 12)),
               const SizedBox(height: 12),
               const Divider(height: 1),
+              ListTile(
+                leading:
+                    const Icon(Icons.person_outline, color: AppColors.primary),
+                title: const Text('Trang cá nhân'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/profile/${user.id}');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.bookmark_outline,
+                    color: AppColors.primary),
+                title: const Text('Bộ sưu tập'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/bookmarks');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.emoji_events_outlined,
+                    color: AppColors.primary),
+                title: const Text('Xem thành tích'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/achievements');
+                },
+              ),
+              if (user.isAdmin)
+                ListTile(
+                  leading: const Icon(Icons.admin_panel_settings_outlined,
+                      color: AppColors.primary),
+                  title: const Text('Quản trị'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/admin');
+                  },
+                ),
             ],
             ListTile(
               leading: const Icon(Icons.logout, color: AppColors.error),
-              title: const Text('Đăng xuất', style: TextStyle(color: AppColors.error)),
+              title: const Text('Đăng xuất',
+                  style: TextStyle(color: AppColors.error)),
               onTap: () {
                 Navigator.pop(ctx);
                 ref.read(authViewModelProvider.notifier).logout();

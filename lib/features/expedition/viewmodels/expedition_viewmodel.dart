@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
+import '../../gamification/models/gamification_result.dart';
+import '../../gamification/repositories/gamification_repository.dart';
 import '../models/expedition_model.dart';
 import '../repositories/expedition_repository.dart';
 
@@ -15,10 +17,15 @@ class ExpeditionActionState {
   final bool isEnding;
   final String? error;
 
+  /// Kết quả gamification sau khi kết thúc Expedition thành công —
+  /// null nếu chưa kết thúc hoặc chưa có Expedition nào hoàn thành.
+  final GamificationResult? gamificationResult;
+
   const ExpeditionActionState({
     this.isStarting = false,
     this.isEnding = false,
     this.error,
+    this.gamificationResult,
   });
 
   ExpeditionActionState copyWith({
@@ -26,11 +33,13 @@ class ExpeditionActionState {
     bool? isEnding,
     String? error,
     bool clearError = false,
+    GamificationResult? gamificationResult,
   }) {
     return ExpeditionActionState(
       isStarting: isStarting ?? this.isStarting,
       isEnding: isEnding ?? this.isEnding,
       error: clearError ? null : (error ?? this.error),
+      gamificationResult: gamificationResult ?? this.gamificationResult,
     );
   }
 }
@@ -211,10 +220,29 @@ class ExpeditionViewModel extends StateNotifier<ExpeditionActionState> {
     try {
       final repository = ref.read(expeditionRepositoryProvider);
       await repository.completeExpedition(id, distanceMeters: _distanceMeters);
+
+      // Cộng XP + kiểm tra Achievement — không throw ra ngoài nếu lỗi,
+      // vì Expedition đã kết thúc thành công rồi, chỉ XP/Achievement bị
+      // bỏ lỡ lần này (giống cách xử lý ở Create Observation).
+      GamificationResult? gamificationResult;
+      final currentUser = ref.read(currentUserProvider).valueOrNull;
+      if (currentUser != null) {
+        try {
+          gamificationResult = await ref
+              .read(gamificationRepositoryProvider)
+              .awardXpForExpedition(currentUser.id, _distanceMeters);
+        } catch (_) {
+          // Nuốt lỗi có chủ đích — xem docstring ở trên.
+        }
+      }
+
       _activeExpeditionId = null;
       _distanceMeters = 0;
       _lastPosition = null;
-      state = state.copyWith(isEnding: false);
+      state = state.copyWith(
+        isEnding: false,
+        gamificationResult: gamificationResult,
+      );
       return id;
     } catch (e) {
       state = state.copyWith(isEnding: false, error: e.toString());

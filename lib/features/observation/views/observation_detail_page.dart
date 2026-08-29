@@ -6,6 +6,10 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/format_utils.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
+import '../../community/providers/community_providers.dart';
+import '../../community/repositories/community_repository.dart';
+import '../../community/widgets/comments_bottom_sheet.dart';
+import '../../community/widgets/report_dialog.dart';
 import '../models/observation_model.dart';
 import '../repositories/observation_repository.dart';
 import '../viewmodels/observation_feed_viewmodel.dart';
@@ -28,7 +32,8 @@ class ObservationDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final observationAsync = ref.watch(observationDetailProvider(observationId));
+    final observationAsync =
+        ref.watch(observationDetailProvider(observationId));
 
     return Scaffold(
       body: observationAsync.when(
@@ -54,12 +59,14 @@ class _NotFoundView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.search_off, size: 48, color: AppColors.textSecondaryLight),
+          const Icon(Icons.search_off,
+              size: 48, color: AppColors.textSecondaryLight),
           const SizedBox(height: 12),
           const Text('Không tìm thấy Observation này.'),
           const SizedBox(height: 12),
           TextButton(
-            onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+            onPressed: () =>
+                context.canPop() ? context.pop() : context.go('/home'),
             child: const Text('Quay lại'),
           ),
         ],
@@ -93,6 +100,23 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
     );
   }
 
+  Future<void> _handleReport(
+    BuildContext context,
+    ObservationModel observation,
+  ) async {
+    final success = await showReportDialog(
+      context,
+      ref: ref,
+      observationId: observation.id,
+      observationTitle: observation.title,
+    );
+    if (context.mounted && success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã gửi báo cáo. Cảm ơn bạn!')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final observation = widget.observation;
@@ -118,7 +142,7 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
             else
               _CircleIconButton(
                 icon: Icons.flag_outlined,
-                onTap: () => _showComingSoon('Report'),
+                onTap: () => _handleReport(context, observation),
               ),
             const SizedBox(width: 12),
           ],
@@ -195,6 +219,10 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
                 const SizedBox(height: 24),
                 const Divider(),
                 const SizedBox(height: 16),
+                _ActionRow(observation: observation),
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 16),
                 _ContributorRow(observation: observation),
               ],
             ),
@@ -224,7 +252,8 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline, color: AppColors.error),
-              title: const Text('Xóa', style: TextStyle(color: AppColors.error)),
+              title:
+                  const Text('Xóa', style: TextStyle(color: AppColors.error)),
               onTap: () async {
                 Navigator.pop(ctx);
                 await _confirmDelete(context, observation);
@@ -441,48 +470,236 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _ContributorRow extends StatelessWidget {
+class _ActionRow extends ConsumerStatefulWidget {
+  final ObservationModel observation;
+
+  const _ActionRow({required this.observation});
+
+  @override
+  ConsumerState<_ActionRow> createState() => _ActionRowState();
+}
+
+class _ActionRowState extends ConsumerState<_ActionRow> {
+  bool _liking = false;
+  bool _bookmarking = false;
+
+  Future<void> _toggleLike() async {
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser == null || _liking) return;
+
+    setState(() => _liking = true);
+    try {
+      await ref
+          .read(communityRepositoryProvider)
+          .toggleLike(widget.observation.id, currentUser.id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _liking = false);
+    }
+  }
+
+  Future<void> _toggleBookmark() async {
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser == null || _bookmarking) return;
+
+    setState(() => _bookmarking = true);
+    try {
+      await ref
+          .read(communityRepositoryProvider)
+          .toggleBookmark(currentUser.id, widget.observation.id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _bookmarking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isLikedAsync = ref.watch(isLikedProvider(widget.observation.id));
+    final isLiked = isLikedAsync.valueOrNull ?? false;
+    final isBookmarkedAsync =
+        ref.watch(isBookmarkedProvider(widget.observation.id));
+    final isBookmarked = isBookmarkedAsync.valueOrNull ?? false;
+
+    return Row(
+      children: [
+        InkWell(
+          onTap: _toggleLike,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: Row(
+              children: [
+                Icon(
+                  isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: isLiked ? AppColors.error : null,
+                  size: 22,
+                ),
+                const SizedBox(width: 6),
+                Text('${widget.observation.likeCount}'),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 20),
+        InkWell(
+          onTap: () => showCommentsBottomSheet(
+            context,
+            observationId: widget.observation.id,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: Row(
+              children: [
+                const Icon(Icons.chat_bubble_outline, size: 20),
+                const SizedBox(width: 6),
+                Text('${widget.observation.commentCount}'),
+              ],
+            ),
+          ),
+        ),
+        const Spacer(),
+        InkWell(
+          onTap: _toggleBookmark,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: Icon(
+              isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: isBookmarked ? AppColors.primary : null,
+              size: 22,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ContributorRow extends ConsumerWidget {
   final ObservationModel observation;
 
   const _ContributorRow({required this.observation});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final isOwnProfile = currentUser?.id == observation.creatorId;
+
     return Row(
       children: [
-        CircleAvatar(
-          radius: 20,
-          backgroundColor: AppColors.primary.withOpacity(0.15),
-          backgroundImage: observation.creatorAvatarUrl != null
-              ? CachedNetworkImageProvider(observation.creatorAvatarUrl!)
-              : null,
-          child: observation.creatorAvatarUrl == null
-              ? Text(
-                  observation.creatorUsername.isNotEmpty
-                      ? observation.creatorUsername[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primaryDark,
-                  ),
-                )
-              : null,
-        ),
-        const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Người đóng góp',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
-              Text(
-                '@${observation.creatorUsername}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
+          child: InkWell(
+            onTap: () => context.push('/profile/${observation.creatorId}'),
+            borderRadius: BorderRadius.circular(12),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: AppColors.primary.withOpacity(0.15),
+                  backgroundImage: observation.creatorAvatarUrl != null
+                      ? CachedNetworkImageProvider(
+                          observation.creatorAvatarUrl!)
+                      : null,
+                  child: observation.creatorAvatarUrl == null
+                      ? Text(
+                          observation.creatorUsername.isNotEmpty
+                              ? observation.creatorUsername[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryDark,
+                          ),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Người đóng góp',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondaryLight)),
+                      Text(
+                        '@${observation.creatorUsername}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
+        if (!isOwnProfile)
+          _MiniFollowButton(targetUserId: observation.creatorId),
       ],
+    );
+  }
+}
+
+class _MiniFollowButton extends ConsumerStatefulWidget {
+  final String targetUserId;
+
+  const _MiniFollowButton({required this.targetUserId});
+
+  @override
+  ConsumerState<_MiniFollowButton> createState() => _MiniFollowButtonState();
+}
+
+class _MiniFollowButtonState extends ConsumerState<_MiniFollowButton> {
+  bool _loading = false;
+
+  Future<void> _toggle() async {
+    final currentUser = ref.read(currentUserProvider).valueOrNull;
+    if (currentUser == null || _loading) return;
+
+    setState(() => _loading = true);
+    try {
+      await ref
+          .read(communityRepositoryProvider)
+          .toggleFollow(currentUser.id, widget.targetUserId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isFollowingAsync =
+        ref.watch(isFollowingProvider(widget.targetUserId));
+    final isFollowing = isFollowingAsync.valueOrNull ?? false;
+
+    return OutlinedButton(
+      onPressed: _loading ? null : _toggle,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 34),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        side: BorderSide(
+          color:
+              isFollowing ? Theme.of(context).dividerColor : AppColors.primary,
+        ),
+        foregroundColor:
+            isFollowing ? AppColors.textSecondaryLight : AppColors.primary,
+      ),
+      child: Text(isFollowing ? 'Đang follow' : 'Follow',
+          style: const TextStyle(fontSize: 12)),
     );
   }
 }

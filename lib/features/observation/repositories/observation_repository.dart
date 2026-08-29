@@ -80,6 +80,9 @@ class ObservationRepository {
   Stream<List<ObservationModel>> watchLatestFeed({int limit = 30}) =>
       _observationService.watchLatestFeed(limit: limit);
 
+  Stream<List<ObservationModel>> watchObservationsByCreator(String creatorId) =>
+      _observationService.watchObservationsByCreator(creatorId);
+
   Future<List<ObservationModel>> getObservationsForExpedition(
     String expeditionId,
   ) =>

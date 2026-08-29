@@ -6,10 +6,14 @@ import '../../features/auth/views/forgot_password_page.dart';
 import '../../features/auth/views/login_page.dart';
 import '../../features/auth/views/register_page.dart';
 import '../../features/auth/views/splash_page.dart';
+import '../../features/admin/views/admin_dashboard_page.dart';
+import '../../features/community/views/bookmarks_page.dart';
 import '../../features/expedition/views/expedition_summary_page.dart';
+import '../../features/gamification/views/achievements_page.dart';
 import '../../features/home/views/home_shell_page.dart';
 import '../../features/observation/views/create_observation_page.dart';
 import '../../features/observation/views/observation_detail_page.dart';
+import '../../features/profile/views/profile_page.dart';
 
 /// Danh sách route path — tập trung một chỗ để tránh gõ nhầm string
 /// literal ở nhiều nơi khác nhau trong app.
@@ -24,6 +28,10 @@ class AppRoutes {
   static const createObservation = '/create-observation';
   static const observationDetail = '/observation/:id';
   static const expeditionSummary = '/expedition/:id/summary';
+  static const achievements = '/achievements';
+  static const profile = '/profile/:id';
+  static const admin = '/admin';
+  static const bookmarks = '/bookmarks';
 }
 
 /// Route Guard: dùng authStateChangesProvider để quyết định redirect.
@@ -101,6 +109,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => ExpeditionSummaryPage(
           expeditionId: state.pathParameters['id']!,
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.achievements,
+        builder: (context, state) => const AchievementsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profile,
+        builder: (context, state) => ProfilePage(
+          userId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.admin,
+        builder: (context, state) => const AdminDashboardPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.bookmarks,
+        builder: (context, state) => const BookmarksPage(),
       ),
     ],
   );

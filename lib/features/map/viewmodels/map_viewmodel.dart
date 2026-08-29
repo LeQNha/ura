@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../auth/services/auth_service.dart';
 import '../../observation/models/observation_model.dart';
 import '../../observation/repositories/observation_repository.dart';
 
@@ -50,8 +51,15 @@ final mapFilterProvider =
 /// Nguồn dữ liệu thô cho Map — lấy nhiều Observation hơn feed thường
 /// (limit cao hơn) vì Map cần hiển thị tổng quan cả khu vực, không chỉ
 /// vài tin mới nhất.
+///
+/// ⚠️ Đợi `authStateChangesProvider` xác nhận xong mới bắn query — xem
+/// giải thích chi tiết ở observation_feed_viewmodel.dart (tránh race
+/// condition permission-denied ngay sau khi đăng nhập/đăng ký).
 final mapObservationsProvider =
     StreamProvider.autoDispose<List<ObservationModel>>((ref) {
+  final authState = ref.watch(authStateChangesProvider);
+  if (authState.valueOrNull == null) return Stream.value(<ObservationModel>[]);
+
   final repository = ref.watch(observationRepositoryProvider);
   return repository.watchLatestFeed(limit: 200);
 });

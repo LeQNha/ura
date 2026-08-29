@@ -4,10 +4,12 @@ import 'package:geolocator/geolocator.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/nominatim_service.dart';
 import '../../auth/models/user_model.dart';
+import '../../expedition/repositories/expedition_repository.dart';
 import '../../expedition/viewmodels/expedition_viewmodel.dart';
+import '../../gamification/models/gamification_result.dart';
+import '../../gamification/repositories/gamification_repository.dart';
 import '../models/category_model.dart';
 import '../repositories/observation_repository.dart';
-import '../../expedition/repositories/expedition_repository.dart';
 
 /// State cho toàn bộ luồng Create Observation (nhiều bước: Photos →
 /// Location → Info → Review). Gom hết vào 1 state class thay vì tách
@@ -35,6 +37,11 @@ class CreateObservationState {
   final bool isSubmitting;
   final String? submitError;
 
+  /// Kết quả gamification (XP/Level/Achievement) sau lần submit thành
+  /// công gần nhất — null nếu chưa submit hoặc submit thất bại. View
+  /// đọc field này để quyết định có hiện popup ăn mừng hay không.
+  final GamificationResult? gamificationResult;
+
   const CreateObservationState({
     this.currentStep = 0,
     this.photos = const [],
@@ -51,6 +58,7 @@ class CreateObservationState {
     required this.observedAt,
     this.isSubmitting = false,
     this.submitError,
+    this.gamificationResult,
   });
 
   factory CreateObservationState.initial() {
@@ -87,6 +95,7 @@ class CreateObservationState {
     bool? isSubmitting,
     String? submitError,
     bool clearSubmitError = false,
+    GamificationResult? gamificationResult,
   }) {
     return CreateObservationState(
       currentStep: currentStep ?? this.currentStep,
@@ -105,6 +114,7 @@ class CreateObservationState {
       observedAt: observedAt ?? this.observedAt,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       submitError: clearSubmitError ? null : (submitError ?? this.submitError),
+      gamificationResult: gamificationResult ?? this.gamificationResult,
     );
   }
 }
@@ -265,7 +275,24 @@ class CreateObservationViewModel extends StateNotifier<CreateObservationState> {
             .incrementObservationCount(activeExpedition.id);
       }
 
-      state = state.copyWith(isSubmitting: false);
+      // Cộng XP + kiểm tra mở khóa Achievement — làm cuối cùng, sau khi
+      // Observation đã chắc chắn tạo thành công. Nếu bước này lỗi (vd
+      // mất mạng thoáng qua giữa 2 bước), không nên làm cả luồng tạo
+      // Observation báo lỗi ngược lại — Observation đã tồn tại rồi, chỉ
+      // là XP/Achievement bị bỏ lỡ lần này, chấp nhận được.
+      GamificationResult? gamificationResult;
+      try {
+        gamificationResult = await ref
+            .read(gamificationRepositoryProvider)
+            .awardXpForObservation(creator.id, state.rarity);
+      } catch (_) {
+        // Nuốt lỗi có chủ đích — xem docstring ở trên.
+      }
+
+      state = state.copyWith(
+        isSubmitting: false,
+        gamificationResult: gamificationResult,
+      );
       return id;
     } catch (e) {
       state = state.copyWith(isSubmitting: false, submitError: e.toString());

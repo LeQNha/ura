@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../gamification/widgets/gamification_dialogs.dart';
 import '../models/expedition_model.dart';
 import '../viewmodels/expedition_viewmodel.dart';
 import '../widgets/expedition_route_preview.dart';
@@ -92,7 +93,8 @@ class _StartView extends StatelessWidget {
                 color: AppColors.primary.withOpacity(0.10),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.hiking, size: 48, color: AppColors.primary),
+              child:
+                  const Icon(Icons.hiking, size: 48, color: AppColors.primary),
             ),
             const SizedBox(height: 24),
             Text(
@@ -138,7 +140,7 @@ class _StartView extends StatelessWidget {
   }
 }
 
-class _ActiveView extends StatelessWidget {
+class _ActiveView extends ConsumerWidget {
   final ExpeditionModel expedition;
   final DateTime now;
   final ExpeditionActionState actionState;
@@ -151,11 +153,20 @@ class _ActiveView extends StatelessWidget {
     required this.viewModel,
   });
 
-  Future<void> _handleEnd(BuildContext context) async {
+  Future<void> _handleEnd(BuildContext context, WidgetRef ref) async {
     final id = await viewModel.end();
-    if (id != null && context.mounted) {
-      context.push('/expedition/$id/summary');
+    if (id == null || !context.mounted) return;
+
+    // Đọc lại state MỚI NHẤT qua ref (không dùng `actionState` — field
+    // đó là giá trị tại thời điểm widget này được build, TRƯỚC khi
+    // end() chạy xong, nên sẽ là dữ liệu cũ/null nếu đọc trực tiếp).
+    final result = ref.read(expeditionViewModelProvider).gamificationResult;
+    if (result != null) {
+      await showGamificationCelebrations(context, result);
     }
+    if (!context.mounted) return;
+
+    context.push('/expedition/$id/summary');
   }
 
   Future<void> _handleCancel(BuildContext context) async {
@@ -173,7 +184,8 @@ class _ActiveView extends StatelessWidget {
               child: const Text('Tiếp tục thám hiểm')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hủy chuyến', style: TextStyle(color: AppColors.error)),
+            child: const Text('Hủy chuyến',
+                style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -182,7 +194,7 @@ class _ActiveView extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final elapsed = now.difference(expedition.startedAt);
 
     return ListView(
@@ -237,7 +249,8 @@ class _ActiveView extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: actionState.isEnding ? null : () => _handleEnd(context),
+            onPressed:
+                actionState.isEnding ? null : () => _handleEnd(context, ref),
             icon: actionState.isEnding
                 ? const SizedBox(
                     width: 18,
@@ -252,7 +265,8 @@ class _ActiveView extends StatelessWidget {
         const SizedBox(height: 8),
         TextButton(
           onPressed: actionState.isEnding ? null : () => _handleCancel(context),
-          child: const Text('Hủy chuyến', style: TextStyle(color: AppColors.error)),
+          child: const Text('Hủy chuyến',
+              style: TextStyle(color: AppColors.error)),
         ),
         if (actionState.error != null) ...[
           const SizedBox(height: 8),

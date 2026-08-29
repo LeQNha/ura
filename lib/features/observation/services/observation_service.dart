@@ -53,6 +53,23 @@ class ObservationService {
   /// Danh sách Observation được ghi nhận trong 1 Expedition cụ thể —
   /// dùng cho Expedition Summary. Lọc bằng-nhau (==) đơn thuần, không
   /// cần Composite Index.
+  /// Danh sách Observation của 1 user cụ thể — dùng cho Profile page.
+  /// Chỉ lọc bằng-nhau (creatorId, status) trong query, KHÔNG orderBy
+  /// trong query (tránh phải tạo thêm Composite Index) — sắp xếp theo
+  /// createdAt ở phía client sau khi có kết quả, chấp nhận được vì số
+  /// Observation của 1 user không quá lớn ở quy mô đồ án.
+  Stream<List<ObservationModel>> watchObservationsByCreator(String creatorId) {
+    return _observationsRef
+        .where('creatorId', isEqualTo: creatorId)
+        .where('status', isEqualTo: ObservationStatus.active)
+        .snapshots()
+        .map((snap) {
+      final list = snap.docs.map(ObservationModel.fromSnapshot).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
   Future<List<ObservationModel>> getObservationsForExpedition(
     String expeditionId,
   ) async {

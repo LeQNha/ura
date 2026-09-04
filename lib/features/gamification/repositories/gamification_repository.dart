@@ -42,7 +42,8 @@ class GamificationRepository {
     };
     final xpGain = 10 + bonus;
 
-    final stats = await _firestore.runTransaction<Map<String, dynamic>>((tx) async {
+    final stats =
+        await _firestore.runTransaction<Map<String, dynamic>>((tx) async {
       final snap = await tx.get(_userRef(userId));
       final data = snap.data() ?? {};
 
@@ -81,6 +82,42 @@ class GamificationRepository {
     return _checkAchievementsAndFinalize(userId, stats);
   }
 
+  /// Cộng XP "trần trụi" — không đi kèm cập nhật counter nào khác
+  /// (observationCount/expeditionCount/...), không kiểm tra Achievement
+  /// mới. Dùng cho các nguồn thưởng XP rời rạc như Mission reward
+  /// (Phase 8) — tái sử dụng đúng logic tính Level (đọc-tính-ghi bằng
+  /// Transaction) thay vì viết lại 1 bản riêng ở MissionRepository.
+  Future<GamificationResult> awardBonusXp(String userId, int amount) async {
+    final result =
+        await _firestore.runTransaction<Map<String, dynamic>>((tx) async {
+      final snap = await tx.get(_userRef(userId));
+      final data = snap.data() ?? {};
+      final currentXp = (data['xp'] as num?)?.toInt() ?? 0;
+      final currentLevel = (data['level'] as num?)?.toInt() ?? 1;
+
+      final newXp = currentXp + amount;
+      final newLevel = levelForXp(newXp);
+
+      tx.update(_userRef(userId), {
+        'xp': newXp,
+        'level': newLevel,
+        'updatedAt': Timestamp.fromDate(DateTime.now()),
+      });
+
+      return {
+        'xp': newXp,
+        'level': newLevel,
+        'leveledUp': newLevel > currentLevel,
+      };
+    });
+
+    return GamificationResult(
+      xp: result['xp'] as int,
+      level: result['level'] as int,
+      leveledUp: result['leveledUp'] as bool,
+    );
+  }
+
   Future<GamificationResult> awardXpForExpedition(
     String userId,
     double distanceMeters,
@@ -91,7 +128,8 @@ class GamificationRepository {
     final distanceBonus = (distanceMeters / 100).floor().clamp(0, 50);
     final xpGain = 20 + distanceBonus;
 
-    final stats = await _firestore.runTransaction<Map<String, dynamic>>((tx) async {
+    final stats =
+        await _firestore.runTransaction<Map<String, dynamic>>((tx) async {
       final snap = await tx.get(_userRef(userId));
       final data = snap.data() ?? {};
 
@@ -165,11 +203,11 @@ class GamificationRepository {
 
     if (newlyUnlocked.isEmpty) return baseResult;
 
-    final bonusXp =
-        newlyUnlocked.fold<int>(0, (sum, a) => sum + a.xpReward);
+    final bonusXp = newlyUnlocked.fold<int>(0, (sum, a) => sum + a.xpReward);
     final newIds = [...unlockedIds, ...newlyUnlocked.map((a) => a.id)];
 
-    final finalResult = await _firestore.runTransaction<Map<String, dynamic>>((tx) async {
+    final finalResult =
+        await _firestore.runTransaction<Map<String, dynamic>>((tx) async {
       final snap = await tx.get(_userRef(userId));
       final data = snap.data() ?? {};
       final currentXp = (data['xp'] as num?)?.toInt() ?? 0;

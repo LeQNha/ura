@@ -95,40 +95,17 @@ class DefaultCategories {
   DefaultCategories._();
 
   static const List<Map<String, String>> seed = [
+    {'icon': '🪧', 'name': 'Sign / Advertisement'},
     {'icon': '🏛️', 'name': 'Architecture'},
-    {'icon': '🏚️', 'name': 'Forgotten Place'},
-    {'icon': '🧱', 'name': 'Urban Trace'},
-    {'icon': '🛣️', 'name': 'Infrastructure'},
-    {'icon': '🏺', 'name': 'Cultural & Historical'},
-    {'icon': '🎨', 'name': 'Street Art'},
-    {'icon': '🏪', 'name': 'Local Life'},
-    {'icon': '🌿', 'name': 'Hidden Nature'},
-    {'icon': '🌆', 'name': 'Scenic & Atmospheric'},
+    {'icon': '🏪', 'name': 'Commercial Trace'},
+    {'icon': '🧱', 'name': 'Urban Structure'},
+    {'icon': '🏚️', 'name': 'Abandoned'},
+    {'icon': '🚪', 'name': 'Door / Window'},
+    {'icon': '🛠️', 'name': 'Infrastructure'},
     {'icon': '✨', 'name': 'Interesting Place'},
     {'icon': '📦', 'name': 'Other'},
   ];
 }
-
-// 🏛️ Architecture
-// 🏚️ Forgotten Place
-// 🧱 Urban Remnant
-// 🛣️ Infrastructure
-// 🏪 Commercial Trace
-// 🎨 Street Art & Markings
-// 🏺 Cultural Trace
-// ✨ Interesting Place
-
-// 🏛️ Architecture
-// 🏚️ Forgotten Place
-// 🧱 Urban Trace
-// 🛣️ Infrastructure
-// 🏺 Cultural & Historical
-// 🎨 Street Art
-// 🏪 Local Life
-// 🌿 Hidden Nature
-// 🌆 Scenic & Atmospheric
-// ✨ Interesting Place
-// 📦 Other
 
 /// Danh sách Achievement mặc định (Phase 5) — cùng logic seed-1-lần
 /// như DefaultCategories: AchievementService ghi các document này vào
@@ -207,6 +184,50 @@ class DefaultAchievements {
       'xpReward': 80,
       'conditionType': 'totalDistance',
       'conditionValue': 5000,
+    },
+  ];
+}
+
+/// Danh sách Mission mẫu (Phase 8 — Hidden in Plain Sight). Cùng cách
+/// seed-1-lần như Category/Achievement. `targetCategoryId` để trống ở
+/// đây vì phụ thuộc vào id Category thật trên Firestore của từng máy
+/// (khác nhau mỗi lần seed) — Admin cần tự gán Category cho Mission
+/// loại "category" qua Admin Dashboard sau khi seed xong.
+class DefaultMissions {
+  DefaultMissions._();
+
+  static const List<Map<String, dynamic>> seed = [
+    {
+      'title': 'Người mới nhập môn',
+      'description': 'Tạo 3 Observation bất kỳ',
+      'icon': '🔰',
+      'type': 'quantity',
+      'targetValue': 3,
+      'rewardXp': 30,
+    },
+    {
+      'title': 'Nhà sưu tầm',
+      'description': 'Tạo 15 Observation bất kỳ',
+      'icon': '📸',
+      'type': 'quantity',
+      'targetValue': 15,
+      'rewardXp': 100,
+    },
+    {
+      'title': 'Người lữ hành bền bỉ',
+      'description': 'Đi bộ tổng cộng 2km qua các chuyến thám hiểm',
+      'icon': '🥾',
+      'type': 'distance',
+      'targetValue': 2000,
+      'rewardXp': 50,
+    },
+    {
+      'title': 'Người đi xa',
+      'description': 'Đi bộ tổng cộng 10km qua các chuyến thám hiểm',
+      'icon': '🏔️',
+      'type': 'distance',
+      'targetValue': 10000,
+      'rewardXp': 200,
     },
   ];
 }

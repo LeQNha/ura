@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/state_widgets.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../observation/models/observation_model.dart';
 import '../../observation/repositories/observation_repository.dart';
@@ -39,28 +39,10 @@ class BookmarksPage extends ConsumerWidget {
       body: bookmarksAsync.when(
         data: (observations) {
           if (observations.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.bookmark_border,
-                        size: 48, color: AppColors.textSecondaryLight),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Chưa lưu Observation nào',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Bấm biểu tượng 🔖 trên 1 Observation để lưu vào đây.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
+            return const EmptyStateWidget(
+              icon: Icons.bookmark_border,
+              title: 'Chưa lưu Observation nào',
+              subtitle: 'Bấm biểu tượng 🔖 trên 1 Observation để lưu vào đây.',
             );
           }
           return ListView.separated(
@@ -76,8 +58,11 @@ class BookmarksPage extends ConsumerWidget {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Lỗi: $e')),
+        loading: () => const LoadingStateWidget(),
+        error: (e, _) => ErrorStateWidget(
+          message: '$e',
+          onRetry: () => ref.invalidate(_bookmarkedObservationsProvider),
+        ),
       ),
     );
   }

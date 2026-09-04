@@ -11,6 +11,7 @@ import '../../features/community/views/bookmarks_page.dart';
 import '../../features/expedition/views/expedition_summary_page.dart';
 import '../../features/gamification/views/achievements_page.dart';
 import '../../features/home/views/home_shell_page.dart';
+import '../../features/mission/views/missions_page.dart';
 import '../../features/observation/views/create_observation_page.dart';
 import '../../features/observation/views/observation_detail_page.dart';
 import '../../features/profile/views/profile_page.dart';
@@ -32,6 +33,7 @@ class AppRoutes {
   static const profile = '/profile/:id';
   static const admin = '/admin';
   static const bookmarks = '/bookmarks';
+  static const missions = '/missions';
 }
 
 /// Route Guard: dùng authStateChangesProvider để quyết định redirect.
@@ -127,6 +129,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.bookmarks,
         builder: (context, state) => const BookmarksPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.missions,
+        builder: (context, state) => const MissionsPage(),
       ),
     ],
   );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/state_widgets.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../models/achievement_model.dart';
 import '../services/achievement_service.dart';
@@ -29,7 +30,8 @@ class AchievementsPage extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Achievement', style: Theme.of(context).textTheme.titleLarge),
+                  Text('Achievement',
+                      style: Theme.of(context).textTheme.titleLarge),
                   Text(
                     '${user.unlockedAchievementIds.length} đã mở khóa',
                     style: Theme.of(context).textTheme.labelMedium,
@@ -55,8 +57,8 @@ class AchievementsPage extends ConsumerWidget {
                     itemCount: achievements.length,
                     itemBuilder: (context, index) {
                       final achievement = achievements[index];
-                      final unlocked = user.unlockedAchievementIds
-                          .contains(achievement.id);
+                      final unlocked =
+                          user.unlockedAchievementIds.contains(achievement.id);
                       return _AchievementTile(
                         achievement: achievement,
                         unlocked: unlocked,
@@ -73,8 +75,8 @@ class AchievementsPage extends ConsumerWidget {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Lỗi: $e')),
+        loading: () => const LoadingStateWidget(),
+        error: (e, _) => ErrorStateWidget(message: '$e'),
       ),
     );
   }
@@ -110,7 +112,8 @@ class _AchievementTile extends StatelessWidget {
                   : '🔒 Chưa mở khóa · Thưởng ${achievement.xpReward} XP',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: unlocked ? AppColors.success : AppColors.textSecondaryLight,
+                color:
+                    unlocked ? AppColors.success : AppColors.textSecondaryLight,
               ),
             ),
           ],
@@ -148,7 +151,8 @@ class _AchievementTile extends StatelessWidget {
           children: [
             Opacity(
               opacity: unlocked ? 1 : 0.35,
-              child: Text(achievement.icon, style: const TextStyle(fontSize: 34)),
+              child:
+                  Text(achievement.icon, style: const TextStyle(fontSize: 34)),
             ),
             const SizedBox(height: 8),
             Text(
@@ -179,7 +183,8 @@ class _EmptyAchievementsCard extends ConsumerStatefulWidget {
       _EmptyAchievementsCardState();
 }
 
-class _EmptyAchievementsCardState extends ConsumerState<_EmptyAchievementsCard> {
+class _EmptyAchievementsCardState
+    extends ConsumerState<_EmptyAchievementsCard> {
   bool _seeding = false;
 
   @override

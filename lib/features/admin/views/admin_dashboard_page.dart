@@ -9,15 +9,17 @@ import '../../community/providers/community_providers.dart';
 import '../../community/repositories/community_repository.dart';
 import '../../gamification/models/achievement_model.dart';
 import '../../gamification/services/achievement_service.dart';
+import '../../mission/models/mission_model.dart';
+import '../../mission/services/mission_service.dart';
 import '../../observation/models/category_model.dart';
 import '../../observation/repositories/observation_repository.dart';
 import '../../observation/services/category_service.dart';
 
-/// Admin Dashboard — 4 khu vực quản trị cơ bản: Báo cáo (moderation),
-/// Danh mục, Achievement, Người dùng. Chỉ user có `role == 'admin'`
-/// mới vào được — kiểm tra ngay trong widget này (không sửa Route
-/// Guard toàn cục ở app_router.dart để tránh rủi ro ảnh hưởng luồng
-/// Auth đã ổn định từ Phase 0).
+/// Admin Dashboard — 5 khu vực quản trị cơ bản: Báo cáo (moderation),
+/// Danh mục, Achievement, Nhiệm vụ, Người dùng. Chỉ user có
+/// `role == 'admin'` mới vào được — kiểm tra ngay trong widget này
+/// (không sửa Route Guard toàn cục ở app_router.dart để tránh rủi ro
+/// ảnh hưởng luồng Auth đã ổn định từ Phase 0).
 class AdminDashboardPage extends ConsumerWidget {
   const AdminDashboardPage({super.key});
 
@@ -41,7 +43,7 @@ class AdminDashboardPage extends ConsumerWidget {
     }
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Quản trị'),
@@ -51,6 +53,7 @@ class AdminDashboardPage extends ConsumerWidget {
               Tab(icon: Icon(Icons.flag_outlined), text: 'Báo cáo'),
               Tab(icon: Icon(Icons.category_outlined), text: 'Danh mục'),
               Tab(icon: Icon(Icons.emoji_events_outlined), text: 'Achievement'),
+              Tab(icon: Icon(Icons.flag_outlined), text: 'Nhiệm vụ'),
               Tab(icon: Icon(Icons.people_outline), text: 'Người dùng'),
             ],
           ),
@@ -60,6 +63,7 @@ class AdminDashboardPage extends ConsumerWidget {
             _ReportsTab(),
             _CategoriesTab(),
             _AchievementsTab(),
+            _MissionsTab(),
             _UsersTab(),
           ],
         ),
@@ -88,10 +92,12 @@ class _ReportsTab extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Xóa Observation bị báo cáo?'),
-        content: Text('"${report.observationTitle}" sẽ không còn hiển thị công khai.'),
+        content: Text(
+            '"${report.observationTitle}" sẽ không còn hiển thị công khai.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Hủy')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Xóa', style: TextStyle(color: AppColors.error)),
@@ -232,9 +238,11 @@ class _CategoriesTab extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Hủy')),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true), child: const Text('Thêm')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Thêm')),
         ],
       ),
     );
@@ -277,7 +285,8 @@ class _CategoriesTab extends ConsumerWidget {
                 leading: Text(c.icon, style: const TextStyle(fontSize: 22)),
                 title: Text(c.name),
                 trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                  icon:
+                      const Icon(Icons.delete_outline, color: AppColors.error),
                   onPressed: () => _delete(ref, c.id),
                 ),
               );
@@ -338,7 +347,8 @@ class _AchievementsTab extends ConsumerWidget {
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: conditionType,
-                  decoration: const InputDecoration(labelText: 'Loại điều kiện'),
+                  decoration:
+                      const InputDecoration(labelText: 'Loại điều kiện'),
                   items: const [
                     DropdownMenuItem(
                         value: AchievementConditionType.observationCount,
@@ -359,16 +369,19 @@ class _AchievementsTab extends ConsumerWidget {
                 TextField(
                   controller: valueController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Ngưỡng điều kiện'),
+                  decoration:
+                      const InputDecoration(labelText: 'Ngưỡng điều kiện'),
                 ),
               ],
             ),
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Hủy')),
             TextButton(
-                onPressed: () => Navigator.pop(ctx, true), child: const Text('Thêm')),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Thêm')),
           ],
         ),
       ),
@@ -416,7 +429,8 @@ class _AchievementsTab extends ConsumerWidget {
                 title: Text(a.name),
                 subtitle: Text('${a.description} · +${a.xpReward} XP'),
                 trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                  icon:
+                      const Icon(Icons.delete_outline, color: AppColors.error),
                   onPressed: () => _delete(ref, a.id),
                 ),
               );
@@ -431,13 +445,182 @@ class _AchievementsTab extends ConsumerWidget {
 }
 
 // =======================================================================
-// Tab 4 — Người dùng
+// Tab 4 — Nhiệm vụ
+// =======================================================================
+
+class _MissionsTab extends ConsumerWidget {
+  const _MissionsTab();
+
+  Future<void> _showAddDialog(BuildContext context, WidgetRef ref) async {
+    final titleController = TextEditingController();
+    final descController = TextEditingController();
+    final iconController = TextEditingController(text: '🎯');
+    final xpController = TextEditingController(text: '30');
+    final valueController = TextEditingController(text: '3');
+    String type = MissionType.quantity;
+    CategoryModel? selectedCategory;
+
+    final categories =
+        await ref.read(categoryServiceProvider).getCategoriesOnce();
+
+    if (!context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Thêm Nhiệm vụ'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: iconController,
+                  decoration: const InputDecoration(labelText: 'Icon (emoji)'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Tiêu đề'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(labelText: 'Mô tả'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: xpController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'XP thưởng'),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: type,
+                  decoration: const InputDecoration(labelText: 'Loại nhiệm vụ'),
+                  items: const [
+                    DropdownMenuItem(
+                        value: MissionType.quantity,
+                        child: Text('Tạo N Observation bất kỳ')),
+                    DropdownMenuItem(
+                        value: MissionType.category,
+                        child: Text('Tạo N Observation thuộc danh mục')),
+                    DropdownMenuItem(
+                        value: MissionType.distance,
+                        child: Text('Đi bộ N mét')),
+                  ],
+                  onChanged: (v) => setState(() => type = v!),
+                ),
+                if (type == MissionType.category) ...[
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<CategoryModel>(
+                    initialValue: selectedCategory,
+                    decoration: const InputDecoration(labelText: 'Danh mục'),
+                    items: categories
+                        .map((c) => DropdownMenuItem(
+                              value: c,
+                              child: Text('${c.icon} ${c.name}'),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setState(() => selectedCategory = v),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                TextField(
+                  controller: valueController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: type == MissionType.distance
+                        ? 'Số mét cần đi'
+                        : 'Số Observation cần tạo',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Hủy')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Thêm')),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true &&
+        titleController.text.trim().isNotEmpty &&
+        (type != MissionType.category || selectedCategory != null)) {
+      await ref.read(missionServiceProvider).createMission(MissionModel(
+            id: '',
+            title: titleController.text.trim(),
+            description: descController.text.trim(),
+            icon: iconController.text.trim().isEmpty
+                ? '🎯'
+                : iconController.text.trim(),
+            type: type,
+            targetCategoryId: selectedCategory?.id,
+            targetCategoryName: selectedCategory?.name,
+            targetValue: num.tryParse(valueController.text) ?? 1,
+            rewardXp: int.tryParse(xpController.text) ?? 30,
+          ));
+    }
+  }
+
+  Future<void> _delete(WidgetRef ref, String id) async {
+    await ref.read(missionServiceProvider).deleteMission(id);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final missionsAsync = ref.watch(missionsStreamProvider);
+
+    return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showAddDialog(context, ref),
+        child: const Icon(Icons.add),
+      ),
+      body: missionsAsync.when(
+        data: (missions) {
+          if (missions.isEmpty) {
+            return const Center(child: Text('Chưa có Nhiệm vụ nào.'));
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: missions.length,
+            itemBuilder: (context, index) {
+              final MissionModel m = missions[index];
+              return ListTile(
+                leading: Text(m.icon, style: const TextStyle(fontSize: 22)),
+                title: Text(m.title),
+                subtitle: Text('${m.description} · +${m.rewardXp} XP'),
+                trailing: IconButton(
+                  icon:
+                      const Icon(Icons.delete_outline, color: AppColors.error),
+                  onPressed: () => _delete(ref, m.id),
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Lỗi: $e')),
+      ),
+    );
+  }
+}
+
+// =======================================================================
+// Tab 5 — Người dùng
 // =======================================================================
 
 class _UsersTab extends ConsumerWidget {
   const _UsersTab();
 
-  Future<void> _toggleRole(BuildContext context, WidgetRef ref, UserModel user) async {
+  Future<void> _toggleRole(
+      BuildContext context, WidgetRef ref, UserModel user) async {
     final newRole = user.isAdmin ? 'user' : 'admin';
     final confirmed = await showDialog<bool>(
       context: context,
@@ -446,14 +629,18 @@ class _UsersTab extends ConsumerWidget {
         content: Text('@${user.username} sẽ trở thành "$newRole".'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Hủy')),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true), child: const Text('Xác nhận')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Xác nhận')),
         ],
       ),
     );
     if (confirmed == true) {
-      await ref.read(userFirestoreServiceProvider).updateUserRole(user.id, newRole);
+      await ref
+          .read(userFirestoreServiceProvider)
+          .updateUserRole(user.id, newRole);
     }
   }
 
@@ -472,9 +659,12 @@ class _UsersTab extends ConsumerWidget {
               leading: CircleAvatar(
                 backgroundColor: AppColors.primary.withOpacity(0.15),
                 child: Text(
-                  user.username.isNotEmpty ? user.username[0].toUpperCase() : '?',
+                  user.username.isNotEmpty
+                      ? user.username[0].toUpperCase()
+                      : '?',
                   style: const TextStyle(
-                      color: AppColors.primaryDark, fontWeight: FontWeight.w700),
+                      color: AppColors.primaryDark,
+                      fontWeight: FontWeight.w700),
                 ),
               ),
               title: Text('@${user.username}'),

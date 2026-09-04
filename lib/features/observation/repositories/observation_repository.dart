@@ -90,6 +90,46 @@ class ObservationRepository {
 
   Future<void> softDeleteObservation(String id) =>
       _observationService.softDeleteObservation(id);
+
+  /// Cập nhật 1 Observation đã tồn tại — dùng cho luồng "Chỉnh sửa"
+  /// (Phase 8 bổ sung). Cho phép đổi cả ảnh: [newPhotoFiles] là ảnh mới
+  /// chọn thêm (chưa upload), [existingPhotoUrls] là URL ảnh cũ user
+  /// muốn GIỮ LẠI (ảnh nào bị xóa thì không có trong list này nữa — xử
+  /// lý loại bỏ đã làm ở tầng UI/ViewModel trước khi gọi hàm này).
+  /// Vị trí (lat/lng/address) KHÔNG được sửa qua hàm này — theo đúng
+  /// quyết định giữ nguyên định vị gốc, tránh Observation "trôi" khỏi
+  /// đúng vị trí thực tế đã ghi nhận ban đầu.
+  Future<void> updateObservationDetails({
+    required String id,
+    required List<String> existingPhotoUrls,
+    required List<File> newPhotoFiles,
+    required String title,
+    String? description,
+    required CategoryModel category,
+    required List<String> tags,
+    required String rarity,
+  }) async {
+    final uploadedUrls = newPhotoFiles.isEmpty
+        ? <String>[]
+        : await _cloudinaryService.uploadImages(
+            newPhotoFiles,
+            folder: 'observations',
+          );
+
+    final photos = [...existingPhotoUrls, ...uploadedUrls];
+
+    await _observationService.updateObservation(id, {
+      'title': title.trim(),
+      'description':
+          (description?.trim().isEmpty ?? true) ? null : description!.trim(),
+      'photos': photos,
+      'categoryId': category.id,
+      'categoryName': category.name,
+      'categoryIcon': category.icon,
+      'tags': tags,
+      'rarity': rarity,
+    });
+  }
 }
 
 final observationRepositoryProvider = Provider<ObservationRepository>((ref) {

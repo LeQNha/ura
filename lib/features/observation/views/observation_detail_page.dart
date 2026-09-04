@@ -10,11 +10,13 @@ import '../../community/providers/community_providers.dart';
 import '../../community/repositories/community_repository.dart';
 import '../../community/widgets/comments_bottom_sheet.dart';
 import '../../community/widgets/report_dialog.dart';
+import '../../then_and_now/views/then_and_now_page.dart';
 import '../models/observation_model.dart';
 import '../repositories/observation_repository.dart';
 import '../viewmodels/observation_feed_viewmodel.dart';
 import '../widgets/category_pill.dart';
 import '../widgets/rarity_badge.dart';
+import 'edit_observation_page.dart';
 
 /// Observation Detail — theo đúng layout đã chốt ở tài liệu 8.4:
 /// Photo Gallery → Title → Category/Rarity → Description → Location →
@@ -193,6 +195,22 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
                         .toList(),
                   ),
                 ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ThenAndNowPage(
+                          oldPhotoUrl: observation.coverPhoto,
+                          observationTitle: observation.title,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.compare, size: 18),
+                    label: const Text('Then & Now — So sánh với hiện tại'),
+                  ),
+                ),
                 const SizedBox(height: 24),
                 const Divider(),
                 const SizedBox(height: 16),
@@ -247,7 +265,12 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
               title: const Text('Chỉnh sửa'),
               onTap: () {
                 Navigator.pop(ctx);
-                _showComingSoon('Chỉnh sửa Observation');
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        EditObservationPage(observation: observation),
+                  ),
+                );
               },
             ),
             ListTile(

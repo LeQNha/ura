@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/state_widgets.dart';
 import '../../auth/services/user_firestore_service.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../community/providers/community_providers.dart';
@@ -77,9 +78,12 @@ class ProfilePage extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _StatColumn(value: '${profile.observationCount}', label: 'Ghi nhận'),
-                  _StatColumn(value: '${profile.followerCount}', label: 'Follower'),
-                  _StatColumn(value: '${profile.followingCount}', label: 'Following'),
+                  _StatColumn(
+                      value: '${profile.observationCount}', label: 'Ghi nhận'),
+                  _StatColumn(
+                      value: '${profile.followerCount}', label: 'Follower'),
+                  _StatColumn(
+                      value: '${profile.followingCount}', label: 'Following'),
                 ],
               ),
               const SizedBox(height: 20),
@@ -107,7 +111,8 @@ class ProfilePage extends ConsumerWidget {
                               padding: const EdgeInsets.only(bottom: 14),
                               child: ObservationCard(
                                 observation: o,
-                                onTap: () => context.push('/observation/${o.id}'),
+                                onTap: () =>
+                                    context.push('/observation/${o.id}'),
                               ),
                             ))
                         .toList(),
@@ -122,8 +127,11 @@ class ProfilePage extends ConsumerWidget {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Lỗi: $e')),
+        loading: () => const LoadingStateWidget(),
+        error: (e, _) => ErrorStateWidget(
+          message: '$e',
+          onRetry: () => ref.invalidate(userProfileProvider(userId)),
+        ),
       ),
     );
   }
@@ -189,7 +197,8 @@ class _FollowButtonState extends ConsumerState<_FollowButton> {
 
   @override
   Widget build(BuildContext context) {
-    final isFollowingAsync = ref.watch(isFollowingProvider(widget.targetUserId));
+    final isFollowingAsync =
+        ref.watch(isFollowingProvider(widget.targetUserId));
     final isFollowing = isFollowingAsync.valueOrNull ?? false;
 
     return SizedBox(

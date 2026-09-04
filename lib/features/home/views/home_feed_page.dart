@@ -138,6 +138,15 @@ class HomeFeedPage extends ConsumerWidget {
                   context.push('/achievements');
                 },
               ),
+              ListTile(
+                leading:
+                    const Icon(Icons.flag_outlined, color: AppColors.primary),
+                title: const Text('Nhiệm vụ'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/missions');
+                },
+              ),
               if (user.isAdmin)
                 ListTile(
                   leading: const Icon(Icons.admin_panel_settings_outlined,

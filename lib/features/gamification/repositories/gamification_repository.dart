@@ -118,55 +118,7 @@ class GamificationRepository {
     );
   }
 
-  Future<GamificationResult> awardXpForExpedition(
-    String userId,
-    double distanceMeters,
-  ) async {
-    // Giới hạn bonus quãng đường tối đa +50 XP/chuyến — tránh 1 chuyến
-    // đi cực dài "cày" XP mất cân bằng, vẫn phù hợp không có backend
-    // kiểm soát chống gian lận.
-    final distanceBonus = (distanceMeters / 100).floor().clamp(0, 50);
-    final xpGain = 20 + distanceBonus;
-
-    final stats =
-        await _firestore.runTransaction<Map<String, dynamic>>((tx) async {
-      final snap = await tx.get(_userRef(userId));
-      final data = snap.data() ?? {};
-
-      final currentXp = (data['xp'] as num?)?.toInt() ?? 0;
-      final currentLevel = (data['level'] as num?)?.toInt() ?? 1;
-      final currentExpCount = (data['expeditionCount'] as num?)?.toInt() ?? 0;
-      final currentDistance =
-          (data['totalDistanceMeters'] as num?)?.toDouble() ?? 0;
-
-      final newXp = currentXp + xpGain;
-      final newLevel = levelForXp(newXp);
-      final newDistance = currentDistance + distanceMeters;
-
-      tx.update(_userRef(userId), {
-        'xp': newXp,
-        'level': newLevel,
-        'expeditionCount': currentExpCount + 1,
-        'totalDistanceMeters': newDistance,
-        'updatedAt': Timestamp.fromDate(DateTime.now()),
-      });
-
-      return {
-        'xp': newXp,
-        'level': newLevel,
-        'leveledUp': newLevel > currentLevel,
-        'observationCount': (data['observationCount'] as num?)?.toInt() ?? 0,
-        'expeditionCount': currentExpCount + 1,
-        'bestRarityFound':
-            data['bestRarityFound'] as String? ?? ObservationRarity.common,
-        'totalDistanceMeters': newDistance,
-      };
-    });
-
-    return _checkAchievementsAndFinalize(userId, stats);
-  }
-
-  /// Sau khi cộng XP cơ bản (từ Observation/Expedition), kiểm tra xem
+  /// Sau khi cộng XP cơ bản (từ Observation), kiểm tra xem
   /// chỉ số mới có vừa đủ mở khóa Achievement nào chưa từng có không.
   /// Nếu có, cộng thêm XP thưởng từ Achievement đó bằng 1 transaction
   /// thứ hai (tách riêng để logic mỗi transaction đơn giản, dễ kiểm

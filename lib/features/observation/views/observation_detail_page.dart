@@ -17,6 +17,7 @@ import '../viewmodels/observation_feed_viewmodel.dart';
 import '../widgets/category_pill.dart';
 import '../widgets/rarity_badge.dart';
 import 'edit_observation_page.dart';
+import '../../../core/widgets/directions_button.dart';
 
 /// Observation Detail — theo đúng layout đã chốt ở tài liệu 8.4:
 /// Photo Gallery → Title → Category/Rarity → Description → Location →
@@ -233,6 +234,11 @@ class _DetailContentState extends ConsumerState<_DetailContent> {
                   icon: Icons.upload_outlined,
                   title: 'Đăng lúc',
                   subtitle: formatRelativeTime(observation.createdAt),
+                ),
+                const SizedBox(height: 12),
+                DirectionsButton(
+                  latitude: observation.latitude,
+                  longitude: observation.longitude,
                 ),
                 const SizedBox(height: 24),
                 const Divider(),

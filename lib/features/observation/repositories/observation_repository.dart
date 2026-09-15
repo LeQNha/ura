@@ -83,11 +83,6 @@ class ObservationRepository {
   Stream<List<ObservationModel>> watchObservationsByCreator(String creatorId) =>
       _observationService.watchObservationsByCreator(creatorId);
 
-  Future<List<ObservationModel>> getObservationsForExpedition(
-    String expeditionId,
-  ) =>
-      _observationService.getObservationsForExpedition(expeditionId);
-
   Future<void> softDeleteObservation(String id) =>
       _observationService.softDeleteObservation(id);
 

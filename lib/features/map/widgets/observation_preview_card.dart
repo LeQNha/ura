@@ -5,6 +5,7 @@ import '../../../core/utils/format_utils.dart';
 import '../../observation/models/observation_model.dart';
 import '../../observation/widgets/category_pill.dart';
 import '../../observation/widgets/rarity_badge.dart';
+import '../../../core/widgets/directions_button.dart';
 
 /// Card ngang hiện lên (dạng bottom sheet nhỏ) khi bấm vào 1 marker trên
 /// Map — cho xem nhanh thông tin trước khi quyết định mở Detail đầy đủ,
@@ -93,7 +94,14 @@ class ObservationPreviewCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondaryLight),
+            DirectionsButton(
+              latitude: observation.latitude,
+              longitude: observation.longitude,
+              compact: true,
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right,
+                color: AppColors.textSecondaryLight),
           ],
         ),
       ),

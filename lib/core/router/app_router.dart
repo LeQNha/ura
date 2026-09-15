@@ -8,7 +8,6 @@ import '../../features/auth/views/register_page.dart';
 import '../../features/auth/views/splash_page.dart';
 import '../../features/admin/views/admin_dashboard_page.dart';
 import '../../features/community/views/bookmarks_page.dart';
-import '../../features/expedition/views/expedition_summary_page.dart';
 import '../../features/gamification/views/achievements_page.dart';
 import '../../features/home/views/home_shell_page.dart';
 import '../../features/mission/views/missions_page.dart';
@@ -28,7 +27,6 @@ class AppRoutes {
   static const home = '/home';
   static const createObservation = '/create-observation';
   static const observationDetail = '/observation/:id';
-  static const expeditionSummary = '/expedition/:id/summary';
   static const achievements = '/achievements';
   static const profile = '/profile/:id';
   static const admin = '/admin';
@@ -104,12 +102,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.observationDetail,
         builder: (context, state) => ObservationDetailPage(
           observationId: state.pathParameters['id']!,
-        ),
-      ),
-      GoRoute(
-        path: AppRoutes.expeditionSummary,
-        builder: (context, state) => ExpeditionSummaryPage(
-          expeditionId: state.pathParameters['id']!,
         ),
       ),
       GoRoute(

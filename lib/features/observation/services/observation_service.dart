@@ -50,9 +50,6 @@ class ObservationService {
         .map((snap) => snap.docs.map(ObservationModel.fromSnapshot).toList());
   }
 
-  /// Danh sách Observation được ghi nhận trong 1 Expedition cụ thể —
-  /// dùng cho Expedition Summary. Lọc bằng-nhau (==) đơn thuần, không
-  /// cần Composite Index.
   /// Danh sách Observation của 1 user cụ thể — dùng cho Profile page.
   /// Chỉ lọc bằng-nhau (creatorId, status) trong query, KHÔNG orderBy
   /// trong query (tránh phải tạo thêm Composite Index) — sắp xếp theo
@@ -68,20 +65,6 @@ class ObservationService {
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return list;
     });
-  }
-
-  Future<List<ObservationModel>> getObservationsForExpedition(
-    String expeditionId,
-  ) async {
-    try {
-      final snap = await _observationsRef
-          .where('expeditionId', isEqualTo: expeditionId)
-          .where('status', isEqualTo: ObservationStatus.active)
-          .get();
-      return snap.docs.map(ObservationModel.fromSnapshot).toList();
-    } catch (e) {
-      throw AppException('Không thể tải Observation của Expedition: $e');
-    }
   }
 
   Future<void> updateObservation(

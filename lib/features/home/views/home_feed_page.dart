@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
 import '../../observation/viewmodels/observation_feed_viewmodel.dart';
 import '../../observation/widgets/observation_card.dart';
+import '../../trip_planner/views/trip_planner_page.dart';
 
 /// Feed các Observation mới nhất.
 ///
@@ -92,82 +93,105 @@ class HomeFeedPage extends ConsumerWidget {
     final user = ref.read(currentUserProvider).valueOrNull;
     showModalBottomSheet<void>(
       context: context,
+      // Bắt buộc thêm — không có dòng này, bottom sheet bị giới hạn
+      // chiều cao mặc định (khoảng nửa màn hình) và KHÔNG cho phép nội
+      // dung bên trong vượt quá đó dù có bọc ScrollView, dẫn đến lỗi
+      // tràn layout (overflow) khi danh sách mục dài hơn khung hình.
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            if (user != null) ...[
-              Text('@${user.username}',
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              Text(user.email,
-                  style: const TextStyle(
-                      fontSize: 12, color: AppColors.textSecondaryLight)),
-              const SizedBox(height: 8),
-              Text('Level ${user.level} · ${user.xp} XP',
-                  style: const TextStyle(fontSize: 12)),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               const SizedBox(height: 12),
-              const Divider(height: 1),
-              ListTile(
-                leading:
-                    const Icon(Icons.person_outline, color: AppColors.primary),
-                title: const Text('Trang cá nhân'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.push('/profile/${user.id}');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.bookmark_outline,
-                    color: AppColors.primary),
-                title: const Text('Bộ sưu tập'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.push('/bookmarks');
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.emoji_events_outlined,
-                    color: AppColors.primary),
-                title: const Text('Xem thành tích'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.push('/achievements');
-                },
-              ),
-              ListTile(
-                leading:
-                    const Icon(Icons.flag_outlined, color: AppColors.primary),
-                title: const Text('Nhiệm vụ'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.push('/missions');
-                },
-              ),
-              if (user.isAdmin)
+              if (user != null) ...[
+                Text('@${user.username}',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(user.email,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textSecondaryLight)),
+                const SizedBox(height: 8),
+                Text('Level ${user.level} · ${user.xp} XP',
+                    style: const TextStyle(fontSize: 12)),
+                const SizedBox(height: 12),
+                const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.admin_panel_settings_outlined,
+                  leading: const Icon(Icons.person_outline,
                       color: AppColors.primary),
-                  title: const Text('Quản trị'),
+                  title: const Text('Trang cá nhân'),
                   onTap: () {
                     Navigator.pop(ctx);
-                    context.push('/admin');
+                    context.push('/profile/${user.id}');
                   },
                 ),
+                ListTile(
+                  leading: const Icon(Icons.bookmark_outline,
+                      color: AppColors.primary),
+                  title: const Text('Bộ sưu tập'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/bookmarks');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.emoji_events_outlined,
+                      color: AppColors.primary),
+                  title: const Text('Xem thành tích'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/achievements');
+                  },
+                ),
+                ListTile(
+                  leading:
+                      const Icon(Icons.flag_outlined, color: AppColors.primary),
+                  title: const Text('Nhiệm vụ'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/missions');
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.route_outlined,
+                      color: AppColors.primary),
+                  title: const Text('Lên kế hoạch khám phá'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const TripPlannerPage()),
+                    );
+                  },
+                ),
+                if (user.isAdmin)
+                  ListTile(
+                    leading: const Icon(Icons.admin_panel_settings_outlined,
+                        color: AppColors.primary),
+                    title: const Text('Quản trị'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.push('/admin');
+                    },
+                  ),
+              ],
+              ListTile(
+                leading: const Icon(Icons.logout, color: AppColors.error),
+                title: const Text('Đăng xuất',
+                    style: TextStyle(color: AppColors.error)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  ref.read(authViewModelProvider.notifier).logout();
+                },
+              ),
+              // Đệm thêm dưới cùng — trên vài dòng máy có gesture bar
+              // (thanh cử chỉ), nếu không có đệm này nút "Đăng xuất"
+              // dễ bị dính sát/khuất sau gesture bar.
+              SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
             ],
-            ListTile(
-              leading: const Icon(Icons.logout, color: AppColors.error),
-              title: const Text('Đăng xuất',
-                  style: TextStyle(color: AppColors.error)),
-              onTap: () {
-                Navigator.pop(ctx);
-                ref.read(authViewModelProvider.notifier).logout();
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );

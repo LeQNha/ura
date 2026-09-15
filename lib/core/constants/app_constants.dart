@@ -146,22 +146,6 @@ class DefaultAchievements {
       'conditionValue': 50,
     },
     {
-      'name': 'Bước chân đầu tiên',
-      'description': 'Hoàn thành chuyến thám hiểm đầu tiên',
-      'icon': '🥾',
-      'xpReward': 20,
-      'conditionType': 'expeditionCount',
-      'conditionValue': 1,
-    },
-    {
-      'name': 'Người lữ hành',
-      'description': 'Hoàn thành 10 chuyến thám hiểm',
-      'icon': '🧭',
-      'xpReward': 100,
-      'conditionType': 'expeditionCount',
-      'conditionValue': 10,
-    },
-    {
       'name': 'Săn đồ hiếm',
       'description': 'Tìm được 1 phát hiện độ hiếm Rare trở lên',
       'icon': '💎',
@@ -177,14 +161,6 @@ class DefaultAchievements {
       'conditionType': 'rarityFound',
       'conditionValue': 3,
     },
-    {
-      'name': 'Nhà thám hiểm đường dài',
-      'description': 'Đi bộ tổng cộng 5km qua các chuyến thám hiểm',
-      'icon': '🚶',
-      'xpReward': 80,
-      'conditionType': 'totalDistance',
-      'conditionValue': 5000,
-    },
   ];
 }
 
@@ -193,6 +169,13 @@ class DefaultAchievements {
 /// đây vì phụ thuộc vào id Category thật trên Firestore của từng máy
 /// (khác nhau mỗi lần seed) — Admin cần tự gán Category cho Mission
 /// loại "category" qua Admin Dashboard sau khi seed xong.
+///
+/// ⚠️ Đã bỏ 2 Mission loại "distance" (từng có ở đây) vì tính năng
+/// Expedition — nguồn duy nhất cập nhật `totalDistanceMeters` của user
+/// — đã bị gỡ bỏ khỏi app. Loại Mission "distance" (MissionType.distance)
+/// vẫn còn tồn tại trong code cho tương lai nếu muốn làm lại theo cách
+/// khác, nhưng KHÔNG seed sẵn Mission nào dùng loại này nữa vì sẽ không
+/// bao giờ hoàn thành được.
 class DefaultMissions {
   DefaultMissions._();
 
@@ -212,22 +195,6 @@ class DefaultMissions {
       'type': 'quantity',
       'targetValue': 15,
       'rewardXp': 100,
-    },
-    {
-      'title': 'Người lữ hành bền bỉ',
-      'description': 'Đi bộ tổng cộng 2km qua các chuyến thám hiểm',
-      'icon': '🥾',
-      'type': 'distance',
-      'targetValue': 2000,
-      'rewardXp': 50,
-    },
-    {
-      'title': 'Người đi xa',
-      'description': 'Đi bộ tổng cộng 10km qua các chuyến thám hiểm',
-      'icon': '🏔️',
-      'type': 'distance',
-      'targetValue': 10000,
-      'rewardXp': 200,
     },
   ];
 }

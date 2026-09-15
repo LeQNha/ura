@@ -4,8 +4,6 @@ import 'package:geolocator/geolocator.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/nominatim_service.dart';
 import '../../auth/models/user_model.dart';
-import '../../expedition/repositories/expedition_repository.dart';
-import '../../expedition/viewmodels/expedition_viewmodel.dart';
 import '../../gamification/models/gamification_result.dart';
 import '../../gamification/repositories/gamification_repository.dart';
 import '../models/category_model.dart';
@@ -249,11 +247,6 @@ class CreateObservationViewModel extends StateNotifier<CreateObservationState> {
     try {
       final repository = ref.read(observationRepositoryProvider);
 
-      // Nếu đang có 1 Expedition active, tự động gắn Observation mới
-      // vào chuyến đó — user không cần làm gì thêm, đúng tinh thần
-      // "ghi nhận trong lúc thám hiểm" của core loop app.
-      final activeExpedition = ref.read(activeExpeditionProvider).valueOrNull;
-
       final id = await repository.createObservation(
         creator: creator,
         photoFiles: state.photos,
@@ -266,14 +259,7 @@ class CreateObservationViewModel extends StateNotifier<CreateObservationState> {
         address: state.address,
         observedAt: state.observedAt,
         rarity: state.rarity,
-        expeditionId: activeExpedition?.id,
       );
-
-      if (activeExpedition != null) {
-        await ref
-            .read(expeditionRepositoryProvider)
-            .incrementObservationCount(activeExpedition.id);
-      }
 
       // Cộng XP + kiểm tra mở khóa Achievement — làm cuối cùng, sau khi
       // Observation đã chắc chắn tạo thành công. Nếu bước này lỗi (vd

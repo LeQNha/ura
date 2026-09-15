@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/services/nominatim_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../observation/models/observation_model.dart';
 import '../viewmodels/map_viewmodel.dart';
+import '../widgets/address_search_sheet.dart';
 import '../widgets/map_filter_sheet.dart';
 import '../widgets/map_markers.dart';
 import '../widgets/map_search_bar.dart';
@@ -32,6 +34,12 @@ class _MapPageState extends ConsumerState<MapPage> {
 
   LatLng? _userLocation;
   bool _hasCenteredOnData = false;
+
+  // "Tìm địa điểm" (Nominatim) — khác với ô search phía trên vốn lọc
+  // Observation đang có, đây là kết quả tìm địa danh THẬT để bay bản
+  // đồ tới, không liên quan gì đến dữ liệu Observation.
+  LatLng? _searchedLocation;
+  String? _searchedLocationLabel;
 
   @override
   void initState() {
@@ -105,6 +113,27 @@ class _MapPageState extends ConsumerState<MapPage> {
       ),
       builder: (_) => const MapFilterSheet(),
     );
+  }
+
+  void _openAddressSearch() {
+    showAddressSearchSheet(
+      context,
+      onSelected: (NominatimPlace place) {
+        final latLng = LatLng(place.latitude, place.longitude);
+        setState(() {
+          _searchedLocation = latLng;
+          _searchedLocationLabel = place.displayName;
+        });
+        _mapController.move(latLng, 16);
+      },
+    );
+  }
+
+  void _clearSearchedLocation() {
+    setState(() {
+      _searchedLocation = null;
+      _searchedLocationLabel = null;
+    });
   }
 
   void _showPreview(ObservationModel observation) {
@@ -203,6 +232,15 @@ class _MapPageState extends ConsumerState<MapPage> {
                     child: const _UserLocationDot(),
                   ),
                 ]),
+              if (_searchedLocation != null)
+                MarkerLayer(markers: [
+                  Marker(
+                    point: _searchedLocation!,
+                    width: 36,
+                    height: 36,
+                    child: const _SearchedLocationPin(),
+                  ),
+                ]),
             ],
           ),
 
@@ -230,13 +268,64 @@ class _MapPageState extends ConsumerState<MapPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  MapSearchBar(
-                    controller: _searchController,
-                    onChanged: (v) =>
-                        ref.read(mapFilterProvider.notifier).setQuery(v),
-                    onFilterTap: _openFilterSheet,
-                    hasActiveFilters: filter.selectedCategoryIds.isNotEmpty,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: MapSearchBar(
+                          controller: _searchController,
+                          onChanged: (v) =>
+                              ref.read(mapFilterProvider.notifier).setQuery(v),
+                          onFilterTap: _openFilterSheet,
+                          hasActiveFilters:
+                              filter.selectedCategoryIds.isNotEmpty,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _CircleActionButton(
+                        icon: Icons.place_outlined,
+                        onTap: _openAddressSearch,
+                      ),
+                    ],
                   ),
+                  if (_searchedLocationLabel != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.place,
+                              size: 16, color: AppColors.error),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _searchedLocationLabel!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: _clearSearchedLocation,
+                            child: const Padding(
+                              padding: EdgeInsets.all(2),
+                              child: Icon(Icons.close, size: 16),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (filter.hasActiveFilters && observations.isEmpty)
                     Container(
                       margin: const EdgeInsets.only(top: 10),
@@ -310,6 +399,56 @@ class _UserLocationDot extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Nút tròn nổi cạnh thanh search — dùng chung style với khung filter,
+/// tách riêng để dễ tái sử dụng nếu sau này thêm hành động khác cạnh
+/// search bar.
+class _CircleActionButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _CircleActionButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: AppColors.primaryDark),
+        onPressed: onTap,
+      ),
+    );
+  }
+}
+
+/// Ghim đánh dấu địa điểm vừa tìm qua Nominatim — cố tình khác hình
+/// dạng/màu với marker Observation (hình tròn) và chấm vị trí user
+/// (chấm xanh), để không bị nhầm là 1 trong 2 loại đó.
+class _SearchedLocationPin extends StatelessWidget {
+  const _SearchedLocationPin();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.location_on, size: 36, color: AppColors.error, shadows: [
+          Shadow(color: Colors.black.withOpacity(0.3), blurRadius: 4),
+        ]),
+      ],
     );
   }
 }

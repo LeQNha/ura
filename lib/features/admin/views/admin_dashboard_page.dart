@@ -354,14 +354,13 @@ class _AchievementsTab extends ConsumerWidget {
                         value: AchievementConditionType.observationCount,
                         child: Text('Số Observation')),
                     DropdownMenuItem(
-                        value: AchievementConditionType.expeditionCount,
-                        child: Text('Số Expedition')),
-                    DropdownMenuItem(
                         value: AchievementConditionType.rarityFound,
                         child: Text('Rarity tìm được (0-3)')),
-                    DropdownMenuItem(
-                        value: AchievementConditionType.totalDistance,
-                        child: Text('Tổng quãng đường (m)')),
+                    // Lưu ý: 'expeditionCount' và 'totalDistance' KHÔNG
+                    // còn ở đây — 2 chỉ số này chỉ được cập nhật khi có
+                    // tính năng Expedition (đã gỡ bỏ khỏi app), chọn
+                    // loại điều kiện dựa trên chúng sẽ tạo Achievement
+                    // không bao giờ hoàn thành được.
                   ],
                   onChanged: (v) => setState(() => conditionType = v!),
                 ),
@@ -505,9 +504,10 @@ class _MissionsTab extends ConsumerWidget {
                     DropdownMenuItem(
                         value: MissionType.category,
                         child: Text('Tạo N Observation thuộc danh mục')),
-                    DropdownMenuItem(
-                        value: MissionType.distance,
-                        child: Text('Đi bộ N mét')),
+                    // Lưu ý: 'distance' KHÔNG còn ở đây — chỉ số
+                    // quãng đường của user chỉ được cập nhật khi có
+                    // tính năng Expedition (đã gỡ bỏ), chọn loại này
+                    // sẽ tạo Mission không bao giờ hoàn thành được.
                   ],
                   onChanged: (v) => setState(() => type = v!),
                 ),
@@ -529,10 +529,8 @@ class _MissionsTab extends ConsumerWidget {
                 TextField(
                   controller: valueController,
                   keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: type == MissionType.distance
-                        ? 'Số mét cần đi'
-                        : 'Số Observation cần tạo',
+                  decoration: const InputDecoration(
+                    labelText: 'Số Observation cần tạo',
                   ),
                 ),
               ],

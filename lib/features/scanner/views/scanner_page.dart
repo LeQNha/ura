@@ -19,7 +19,7 @@ import '../widgets/scanner_math.dart';
 /// biết lúc nào tab này đang thật sự hiển thị, từ đó bật/tắt camera —
 /// vì camera là tài nguyên nặng, không nên giữ chạy khi user đang ở
 /// tab khác (IndexedStack giữ mọi tab "sống" trong bộ nhớ cùng lúc).
-const _scannerTabIndex = 3;
+const _scannerTabIndex = 2;
 
 /// Bán kính quét mặc định và các mốc cho user chọn.
 const _radiusOptions = [200.0, 500.0, 1000.0];
@@ -228,7 +228,8 @@ class _ScannerPageState extends ConsumerState<ScannerPage>
       final signedAngle = shortestAngleDiff(_heading, bearing);
       if (signedAngle.abs() > _halfFovDegrees) continue;
 
-      result.add((observation: o, distance: distance, signedAngle: signedAngle));
+      result
+          .add((observation: o, distance: distance, signedAngle: signedAngle));
     }
 
     // Xa vẽ trước, gần vẽ sau (đè lên trên) — tạo cảm giác chiều sâu.
@@ -257,7 +258,8 @@ class _ScannerPageState extends ConsumerState<ScannerPage>
       return const ColoredBox(color: Colors.black);
     }
 
-    final allObservations = ref.watch(mapObservationsProvider).valueOrNull ?? [];
+    final allObservations =
+        ref.watch(mapObservationsProvider).valueOrNull ?? [];
     final markers = _computeVisibleMarkers(allObservations);
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
@@ -297,7 +299,8 @@ class _ScannerPageState extends ConsumerState<ScannerPage>
               height: 10,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+                border: Border.all(
+                    color: Colors.white.withOpacity(0.6), width: 1.5),
               ),
             ),
           ),
@@ -329,7 +332,8 @@ class _ScannerPageState extends ConsumerState<ScannerPage>
                       ),
                     ],
                   ),
-                  if (_locationError != null) _buildErrorBanner(_locationError!),
+                  if (_locationError != null)
+                    _buildErrorBanner(_locationError!),
                   const Spacer(),
                   _buildRadiusSelector(),
                 ],
@@ -442,7 +446,9 @@ class _ScannerPageState extends ConsumerState<ScannerPage>
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                r >= 1000 ? '${(r / 1000).toStringAsFixed(0)}km' : '${r.toInt()}m',
+                r >= 1000
+                    ? '${(r / 1000).toStringAsFixed(0)}km'
+                    : '${r.toInt()}m',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w400,

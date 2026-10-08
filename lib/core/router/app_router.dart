@@ -14,6 +14,7 @@ import '../../features/mission/views/missions_page.dart';
 import '../../features/observation/views/create_observation_page.dart';
 import '../../features/observation/views/observation_detail_page.dart';
 import '../../features/profile/views/profile_page.dart';
+import '../../features/ai/views/recommendations_page.dart';
 
 /// Danh sách route path — tập trung một chỗ để tránh gõ nhầm string
 /// literal ở nhiều nơi khác nhau trong app.
@@ -32,6 +33,7 @@ class AppRoutes {
   static const admin = '/admin';
   static const bookmarks = '/bookmarks';
   static const missions = '/missions';
+  static const recommendations = '/recommendations';
 }
 
 /// Route Guard: dùng authStateChangesProvider để quyết định redirect.
@@ -125,6 +127,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.missions,
         builder: (context, state) => const MissionsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.recommendations,
+        builder: (context, state) => const RecommendationsPage(),
       ),
     ],
   );

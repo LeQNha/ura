@@ -28,7 +28,8 @@ class _AddressSearchSheet extends ConsumerStatefulWidget {
   const _AddressSearchSheet({required this.onSelected});
 
   @override
-  ConsumerState<_AddressSearchSheet> createState() => _AddressSearchSheetState();
+  ConsumerState<_AddressSearchSheet> createState() =>
+      _AddressSearchSheetState();
 }
 
 class _AddressSearchSheetState extends ConsumerState<_AddressSearchSheet> {
@@ -100,7 +101,8 @@ class _AddressSearchSheetState extends ConsumerState<_AddressSearchSheet> {
                   ),
                 ),
               ),
-              Text('Tìm địa điểm', style: Theme.of(context).textTheme.titleLarge),
+              Text('Tìm địa điểm',
+                  style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 12),
               TextField(
                 controller: _controller,

@@ -8,10 +8,16 @@ import 'rarity_badge.dart';
 
 /// Card hiển thị 1 Observation trong feed/danh sách.
 ///
-/// Hướng thiết kế: giống một "trang nhật ký thực địa" hơn là một bài
-/// post mạng xã hội — ảnh lớn chiếm phần trên, rarity đóng vai trò như
-/// một con dấu/nhãn dán ở góc ảnh, phần thông tin bên dưới có nhịp rõ
-/// ràng (title serif nổi bật → category/rarity → meta hàng dưới cùng).
+/// Bản nâng cấp: chuyển sang bố cục kiểu "editorial/tạp chí" — tiêu đề
+/// và Category đặt ĐÈ LÊN ảnh (trên lớp gradient scrim để luôn đọc
+/// được dù ảnh sáng/tối), Rarity đóng vai trò 1 "nhãn specimen" nổi ở
+/// góc trên-trái ảnh thay vì nằm chung hàng với Category bên dưới như
+/// trước — ảnh trở thành yếu tố chủ đạo, đúng tinh thần "field journal"
+/// nhưng có chiều sâu/độ hoàn thiện cao hơn bản pill phẳng cũ.
+///
+/// ⚠️ Giữ nguyên constructor `ObservationCard({observation, onTap})` —
+/// không đổi field nào của [ObservationModel] được dùng, chỉ đổi cách
+/// trình bày.
 class ObservationCard extends StatelessWidget {
   final ObservationModel observation;
   final VoidCallback onTap;
@@ -25,49 +31,38 @@ class ObservationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppColors.surfaceDark : AppColors.surfaceLight;
 
-    return Material(
-      color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      elevation: 0,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildPhoto(context),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    observation.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontSize: 18,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      CategoryPill(
-                        icon: observation.categoryIcon,
-                        name: observation.categoryName,
-                      ),
-                      RarityBadge(rarity: observation.rarity, compact: true),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _buildFooter(context),
-                ],
-              ),
+    // Outer Container vẽ shadow (KHÔNG clip) + ClipRRect bên trong lo
+    // phần bo góc nội dung — tách 2 việc ra để shadow luôn hiện đủ,
+    // không bị clip mất theo bo góc (lỗi thường gặp khi gộp chung 1 widget).
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: AppColors.softShadow(
+          tint: isDark ? Colors.black : AppColors.textPrimaryLight,
+          opacity: isDark ? 0.35 : 0.08,
+          blur: 22,
+          offset: const Offset(0, 10),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Material(
+          color: surface,
+          child: InkWell(
+            onTap: onTap,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildPhoto(context),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+                  child: _buildFooter(context),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -98,18 +93,39 @@ class ObservationCard extends StatelessWidget {
               child: const Icon(Icons.image_outlined, color: Color(0xFFB8B4AC)),
             ),
 
-          // Đếm số ảnh — chỉ hiện khi có nhiều hơn 1, giống chỉ báo
-          // gallery quen thuộc, không cần swipe ngay trên card.
+          // Lớp gradient để chữ đè lên luôn đọc được, bất kể ảnh sáng
+          // hay tối màu ở nửa dưới.
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Color(0xCC000000)],
+                  stops: [0.4, 1.0],
+                ),
+              ),
+            ),
+          ),
+
+          // Rarity nổi như 1 nhãn specimen ở góc trên-trái.
+          Positioned(
+            top: 12,
+            left: 12,
+            child: RarityBadge(rarity: observation.rarity, compact: true),
+          ),
+
+          // Đếm số ảnh — chỉ hiện khi có nhiều hơn 1.
           if (observation.photos.length > 1)
             Positioned(
-              top: 10,
-              right: 10,
+              top: 12,
+              right: 12,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.55),
+                  color: Colors.black.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withOpacity(0.25)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -129,6 +145,41 @@ class ObservationCard extends StatelessWidget {
                 ),
               ),
             ),
+
+          // Category + Title đè lên đáy ảnh, trên lớp gradient.
+          Positioned(
+            left: 14,
+            right: 14,
+            bottom: 12,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CategoryPill(
+                  icon: observation.categoryIcon,
+                  name: observation.categoryName,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  observation.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontSize: 19,
+                    color: Colors.white,
+                    height: 1.15,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black54,
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -138,7 +189,7 @@ class ObservationCard extends StatelessWidget {
     return Row(
       children: [
         CircleAvatar(
-          radius: 11,
+          radius: 12,
           backgroundColor: AppColors.primary.withOpacity(0.15),
           backgroundImage: observation.creatorAvatarUrl != null
               ? CachedNetworkImageProvider(observation.creatorAvatarUrl!)
@@ -156,7 +207,7 @@ class ObservationCard extends StatelessWidget {
                 )
               : null,
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 8),
         Expanded(
           child: Text(
             '@${observation.creatorUsername} · ${formatRelativeTime(observation.createdAt)}',
@@ -165,14 +216,18 @@ class ObservationCard extends StatelessWidget {
             style: Theme.of(context).textTheme.labelMedium,
           ),
         ),
-        Icon(Icons.favorite_border,
-            size: 15, color: Theme.of(context).textTheme.labelMedium?.color),
+        const SizedBox(width: 8),
+        Icon(Icons.favorite_rounded,
+            size: 15,
+            color: observation.likeCount > 0
+                ? AppColors.error.withOpacity(0.75)
+                : Theme.of(context).textTheme.labelMedium?.color),
         const SizedBox(width: 3),
         Text('${observation.likeCount}',
             style: Theme.of(context).textTheme.labelMedium),
-        const SizedBox(width: 10),
-        Icon(Icons.chat_bubble_outline,
-            size: 14, color: Theme.of(context).textTheme.labelMedium?.color),
+        const SizedBox(width: 12),
+        Icon(Icons.chat_bubble_rounded,
+            size: 13, color: Theme.of(context).textTheme.labelMedium?.color),
         const SizedBox(width: 3),
         Text('${observation.commentCount}',
             style: Theme.of(context).textTheme.labelMedium),

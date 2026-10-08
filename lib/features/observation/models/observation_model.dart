@@ -46,6 +46,13 @@ class ObservationModel {
   /// lập, không thuộc chuyến nào.
   final String? expeditionId;
 
+  /// Vector đặc trưng của ảnh bìa, do AI Backend sinh ra khi tạo
+  /// Observation (xem AiService.checkDuplicate). Lưu lại để lần sau có
+  /// cái so sánh khi kiểm tra trùng lặp — null nếu AI server không
+  /// chạy lúc tạo, và điều đó hoàn toàn bình thường (app vẫn hoạt
+  /// động, chỉ là Observation đó không tham gia đối chiếu trùng lặp).
+  final List<double>? photoEmbedding;
+
   const ObservationModel({
     required this.id,
     required this.creatorId,
@@ -69,6 +76,7 @@ class ObservationModel {
     this.likeCount = 0,
     this.commentCount = 0,
     this.expeditionId,
+    this.photoEmbedding,
   });
 
   factory ObservationModel.fromMap(Map<String, dynamic> map, String id) {
@@ -95,6 +103,9 @@ class ObservationModel {
       likeCount: (map['likeCount'] as num?)?.toInt() ?? 0,
       commentCount: (map['commentCount'] as num?)?.toInt() ?? 0,
       expeditionId: map['expeditionId'] as String?,
+      photoEmbedding: (map['photoEmbedding'] as List?)
+          ?.map((e) => (e as num).toDouble())
+          .toList(),
     );
   }
 
@@ -127,6 +138,7 @@ class ObservationModel {
       'likeCount': likeCount,
       'commentCount': commentCount,
       'expeditionId': expeditionId,
+      'photoEmbedding': photoEmbedding,
     };
   }
 

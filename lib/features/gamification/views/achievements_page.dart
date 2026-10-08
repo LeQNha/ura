@@ -50,9 +50,9 @@ class AchievementsPage extends ConsumerWidget {
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 0.95,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 14,
+                      childAspectRatio: 0.88,
                     ),
                     itemCount: achievements.length,
                     itemBuilder: (context, index) {
@@ -132,29 +132,94 @@ class _AchievementTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => _showDetail(context),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: unlocked
-              ? AppColors.primary.withOpacity(0.08)
-              : Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
+          gradient: unlocked
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primary.withOpacity(0.12),
+                    AppColors.primary.withOpacity(0.03),
+                  ],
+                )
+              : null,
+          color: unlocked ? null : Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: unlocked
-                ? AppColors.primary.withOpacity(0.3)
+                ? AppColors.primary.withOpacity(0.35)
                 : Theme.of(context).dividerColor,
           ),
+          boxShadow: unlocked
+              ? AppColors.softShadow(
+                  opacity: 0.14, blur: 14, offset: const Offset(0, 6))
+              : null,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Opacity(
-              opacity: unlocked ? 1 : 0.35,
-              child:
-                  Text(achievement.icon, style: const TextStyle(fontSize: 34)),
+            // Huy hiệu tròn: đã mở khóa thì có vòng gradient + tick
+            // xác nhận; chưa mở khóa thì icon xám mờ + ổ khóa nhỏ.
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: unlocked ? AppColors.primaryGradient : null,
+                    color: unlocked
+                        ? null
+                        : Theme.of(context).dividerColor.withOpacity(0.35),
+                  ),
+                  alignment: Alignment.center,
+                  child: Opacity(
+                    opacity: unlocked ? 1 : 0.4,
+                    child: Text(achievement.icon,
+                        style: const TextStyle(fontSize: 26)),
+                  ),
+                ),
+                if (unlocked)
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(Icons.check_rounded,
+                          size: 10, color: Colors.white),
+                    ),
+                  )
+                else
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: Theme.of(context).dividerColor, width: 1.5),
+                      ),
+                      child: const Icon(Icons.lock_rounded,
+                          size: 10, color: AppColors.textSecondaryLight),
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
               achievement.name,
               textAlign: TextAlign.center,
@@ -162,14 +227,22 @@ class _AchievementTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12.5,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
                 color: unlocked ? null : AppColors.textSecondaryLight,
               ),
             ),
-            const SizedBox(height: 4),
-            if (!unlocked)
-              const Icon(Icons.lock_outline,
-                  size: 14, color: AppColors.textSecondaryLight),
+            const SizedBox(height: 5),
+            Text(
+              '+${achievement.xpReward} XP',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: unlocked
+                    ? AppColors.primaryDark
+                    : AppColors.textSecondaryLight.withOpacity(0.7),
+              ),
+            ),
           ],
         ),
       ),

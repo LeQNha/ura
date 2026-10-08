@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-/// Bộ 3 widget trạng thái dùng chung — Phase 8 (Polish) chuẩn hóa lại
-/// cách hiển thị Empty/Error/Loading thay vì mỗi màn tự viết 1 kiểu
-/// riêng lẻ (như các Phase trước đã làm rải rác). Dùng lại các widget
-/// này cho những màn mới ở Phase 8, và áp dụng lại cho 1 số màn cũ
-/// tiêu biểu (Profile, Bookmarks, Achievements, Admin) làm mẫu — không
-/// sửa lại toàn bộ ~20 màn hình đã có vì phạm vi quá lớn so với 1 phase
-/// polish, nhưng bộ widget này sẵn sàng để áp dụng dần về sau.
+/// Bộ 3 widget trạng thái dùng chung — chuẩn hóa cách hiển thị
+/// Empty/Error/Loading thay vì mỗi màn tự viết 1 kiểu riêng lẻ.
+///
+/// Bản nâng cấp giao diện: icon đặt trong khối tròn có gradient nhẹ +
+/// vòng viền (thay icon xám trần), chữ có nhịp rõ ràng hơn, thêm giới
+/// hạn chiều rộng để dòng mô tả không trải quá dài trên màn rộng.
+/// KHÔNG đổi constructor của cả 3 widget — mọi nơi đang dùng vẫn chạy
+/// nguyên vẹn.
 
 class EmptyStateWidget extends StatelessWidget {
   final IconData icon;
@@ -26,31 +27,40 @@ class EmptyStateWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: AppColors.textSecondaryLight),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                subtitle!,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-            if (action != null) ...[
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _StateIconHalo(icon: icon, tint: AppColors.primary),
               const SizedBox(height: 20),
-              action!,
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  subtitle!,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(height: 1.5),
+                ),
+              ],
+              if (action != null) ...[
+                const SizedBox(height: 24),
+                action!,
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -66,32 +76,44 @@ class ErrorStateWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 44, color: AppColors.error),
-            const SizedBox(height: 12),
-            Text(
-              'Đã có lỗi xảy ra',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            if (onRetry != null) ...[
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Thử lại'),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _StateIconHalo(
+                icon: Icons.cloud_off_rounded,
+                tint: AppColors.error,
               ),
+              const SizedBox(height: 20),
+              Text(
+                'Đã có lỗi xảy ra',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(height: 1.5),
+              ),
+              if (onRetry != null) ...[
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Thử lại'),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -109,12 +131,53 @@ class LoadingStateWidget extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(),
+          const SizedBox(
+            width: 34,
+            height: 34,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
           if (message != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text(message!, style: Theme.of(context).textTheme.bodySmall),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Khối tròn chứa icon cho các state — gradient nhẹ + 2 lớp viền tạo
+/// cảm giác "huy hiệu" thay vì icon trần trên nền trắng.
+class _StateIconHalo extends StatelessWidget {
+  final IconData icon;
+  final Color tint;
+
+  const _StateIconHalo({required this.icon, required this.tint});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 92,
+      height: 92,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [tint.withOpacity(0.16), tint.withOpacity(0.04)],
+        ),
+        border: Border.all(color: tint.withOpacity(0.22), width: 1.2),
+      ),
+      alignment: Alignment.center,
+      child: Container(
+        width: 62,
+        height: 62,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: tint.withOpacity(0.12),
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, size: 30, color: tint),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:urban_archaeology/core/config/ai_config.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
@@ -11,6 +12,10 @@ import '../viewmodels/create_observation_viewmodel.dart';
 import '../widgets/photo_picker_section.dart';
 import '../widgets/rarity_badge.dart';
 import '../widgets/tag_input.dart';
+import '../../ai/services/ai_service.dart';
+import '../../ai/widgets/duplicate_warning_dialog.dart';
+import '../../map/viewmodels/map_viewmodel.dart';
+import 'package:geolocator/geolocator.dart';
 
 const _stepTitles = ['Ảnh', 'Vị trí', 'Thông tin', 'Xem lại'];
 
@@ -180,6 +185,49 @@ class _PrimaryStepButton extends ConsumerWidget {
               }
               final currentUser = ref.read(currentUserProvider).valueOrNull;
               if (currentUser == null) return;
+
+              final state = ref.read(createObservationViewModelProvider);
+
+              if (state.photos.isNotEmpty && state.hasLocation) {
+                // Lọc các Observation lân cận CÓ SẴN embedding để đem đi so sánh
+                final nearby =
+                    (ref.read(mapObservationsProvider).valueOrNull ?? [])
+                        .where((o) =>
+                            o.photoEmbedding != null &&
+                            Geolocator.distanceBetween(
+                                  state.latitude!,
+                                  state.longitude!,
+                                  o.latitude,
+                                  o.longitude,
+                                ) <=
+                                AiConfig.duplicateSearchRadiusMeters)
+                        .toList();
+
+                final result = await ref.read(aiServiceProvider).checkDuplicate(
+                      image: state.photos.first,
+                      candidates: nearby
+                          .map((o) => (
+                                observationId: o.id,
+                                embedding: o.photoEmbedding!,
+                              ))
+                          .toList(),
+                    );
+
+                if (result.isDuplicate && context.mounted) {
+                  final existing = nearby
+                      .where((o) => o.id == result.bestMatch!.observationId)
+                      .firstOrNull;
+                  final stillPost = await showDuplicateWarningDialog(
+                    context,
+                    result: result,
+                    existingObservation: existing,
+                  );
+                  if (!stillPost) return; // người dùng chọn xem lại
+                }
+
+                // Lưu embedding lại để lần sau có cái so sánh
+                // (truyền vào submit — xem ghi chú bên dưới)
+              }
 
               final id = await viewModel.submit(currentUser);
               if (!context.mounted) return;

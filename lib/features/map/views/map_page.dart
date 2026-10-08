@@ -14,6 +14,7 @@ import '../widgets/map_filter_sheet.dart';
 import '../widgets/map_markers.dart';
 import '../widgets/map_search_bar.dart';
 import '../widgets/observation_preview_card.dart';
+import '../../ai/widgets/interesting_area_layer.dart';
 
 /// Tọa độ fallback khi chưa xác định được vị trí user và chưa có
 /// Observation nào để tự căn giữa bản đồ — trung tâm địa lý Việt Nam.
@@ -197,6 +198,7 @@ class _MapPageState extends ConsumerState<MapPage> {
                   debugPrint('❌ Tile load error: $error');
                 },
               ),
+              const InterestingAreaLayer(),
               MarkerClusterLayerWidget(
                 options: MarkerClusterLayerOptions(
                   maxClusterRadius: 50,
@@ -357,6 +359,8 @@ class _MapPageState extends ConsumerState<MapPage> {
             bottom: MediaQuery.of(context).padding.bottom + 16,
             child: Column(
               children: [
+                const InterestingAreaToggle(),
+                const SizedBox(height: 12),
                 FloatingActionButton(
                   heroTag: 'my_location',
                   mini: true,

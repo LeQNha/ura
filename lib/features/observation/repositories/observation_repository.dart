@@ -35,6 +35,7 @@ class ObservationRepository {
     required DateTime observedAt,
     required String rarity,
     String? expeditionId,
+    List<double>? photoEmbedding,
     void Function(int uploaded, int total)? onUploadProgress,
   }) async {
     final photoUrls = await _cloudinaryService.uploadImages(
@@ -66,6 +67,7 @@ class ObservationRepository {
       rarity: rarity,
       status: ObservationStatus.active,
       expeditionId: expeditionId,
+      photoEmbedding: photoEmbedding,
     );
 
     return _observationService.createObservation(observation);

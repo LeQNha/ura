@@ -13,6 +13,7 @@ import '../widgets/address_search_sheet.dart';
 import '../widgets/map_filter_sheet.dart';
 import '../widgets/map_markers.dart';
 import '../widgets/map_search_bar.dart';
+import '../widgets/island_labels_layer.dart';
 import '../widgets/observation_preview_card.dart';
 import '../../ai/widgets/interesting_area_layer.dart';
 
@@ -35,6 +36,10 @@ class _MapPageState extends ConsumerState<MapPage> {
 
   LatLng? _userLocation;
   bool _hasCenteredOnData = false;
+
+  // Lưu mức zoom để nhãn Hoàng Sa / Trường Sa có thể đổi kích thước
+  // nhẹ theo mức phóng to, thu nhỏ của bản đồ.
+  double _mapZoom = _fallbackZoom;
 
   // "Tìm địa điểm" (Nominatim) — khác với ô search phía trên vốn lọc
   // Observation đang có, đây là kết quả tìm địa danh THẬT để bay bản
@@ -181,6 +186,20 @@ class _MapPageState extends ConsumerState<MapPage> {
               initialZoom: _fallbackZoom,
               minZoom: 3,
               maxZoom: 19,
+              // onPositionChanged: (camera, hasGesture) {
+              //   // Chỉ rebuild khi zoom thay đổi đủ rõ rệt, tránh setState
+              //   // liên tục trong lúc người dùng kéo bản đồ.
+              //   if ((camera.zoom - _mapZoom).abs() >= 0.25) {
+              //     setState(() => _mapZoom = camera.zoom);
+              //   }
+              // },
+              onPositionChanged: (camera, hasGesture) {
+                final zoom = camera.zoom;
+
+                if (zoom != null && (zoom - _mapZoom).abs() >= 0.25) {
+                  setState(() => _mapZoom = zoom);
+                }
+              },
             ),
             children: [
               TileLayer(
@@ -243,6 +262,9 @@ class _MapPageState extends ConsumerState<MapPage> {
                     child: const _SearchedLocationPin(),
                   ),
                 ]),
+              // Nhãn địa lý được gắn theo tọa độ thật trên bản đồ,
+              // vì vậy chúng di chuyển theo bản đồ và vẫn đúng vị trí khi zoom.
+              IslandLabelsLayer(zoom: _mapZoom),
             ],
           ),
 

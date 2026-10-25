@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import '../../../core/config/ai_config.dart';
 import '../../observation/models/observation_model.dart';
 import '../models/ai_models.dart';
+import '../models/route_ai_models.dart';
 
 /// Lớp giao tiếp duy nhất với AI Backend (server Python).
 ///
@@ -23,20 +24,28 @@ class AiService {
 
   Uri _uri(String path) => Uri.parse('${AiConfig.baseUrl}$path');
 
+  /// Header dùng chung cho mọi request POST. Nếu server bật kiểm tra
+  /// API key (biến môi trường `AI_API_KEY`) thì cần điền [AiConfig.apiKey].
+  Map<String, String> _headers() => {
+        'Content-Type': 'application/json',
+        if (AiConfig.apiKey.isNotEmpty) 'X-API-Key': AiConfig.apiKey,
+      };
+
   Future<Map<String, dynamic>?> _post(
     String path,
-    Map<String, dynamic> body,
-  ) async {
+    Map<String, dynamic> body, {
+    Duration? timeout,
+  }) async {
     if (!AiConfig.enabled) return null;
 
     try {
       final response = await _client
           .post(
             _uri(path),
-            headers: {'Content-Type': 'application/json'},
+            headers: _headers(),
             body: jsonEncode(body),
           )
-          .timeout(AiConfig.timeout);
+          .timeout(timeout ?? AiConfig.timeout);
 
       if (response.statusCode != 200) {
         debugPrint('AI [$path] trả về mã ${response.statusCode}');
@@ -103,7 +112,8 @@ class AiService {
 
     if (data == null) return [];
     return ((data['areas'] as List?) ?? [])
-        .map((e) => InterestingArea.fromMap(Map<String, dynamic>.from(e as Map)))
+        .map(
+            (e) => InterestingArea.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
   }
 
@@ -133,6 +143,32 @@ class AiService {
     return ((data['recommendations'] as List?) ?? [])
         .map((e) => Recommendation.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
+  }
+
+  /// Lập lộ trình khám phá CÁ NHÂN HÓA (server: `POST /plan-route`).
+  ///
+  /// [requestBody] do `buildPlanRouteRequest()` dựng sẵn (xem
+  /// `personalized_route_mapper.dart`). Trả về:
+  /// - `null` nếu AI tắt, server không phản hồi, trả mã lỗi, hoặc dữ
+  ///   liệu trả về không đọc được → nơi gọi nên chuyển sang bộ lập lộ
+  ///   trình dự phòng chạy trên máy.
+  /// - [AiRouteResult] nếu server phản hồi hợp lệ. Lưu ý `ok == false`
+  ///   KHÔNG phải lỗi: nghĩa là server không tìm được lộ trình phù hợp
+  ///   (hết thời gian, không có địa điểm gần...), kèm `warnings` giải thích.
+  Future<AiRouteResult?> planRoute(Map<String, dynamic> requestBody) async {
+    final data = await _post(
+      '/plan-route',
+      requestBody,
+      timeout: AiConfig.routeTimeout,
+    );
+    if (data == null) return null;
+
+    try {
+      return AiRouteResult.fromMap(data);
+    } catch (e) {
+      debugPrint('AI [/plan-route] dữ liệu không hợp lệ: $e');
+      return null;
+    }
   }
 
   /// Chỉ gửi đúng các trường server cần — không gửi cả Observation

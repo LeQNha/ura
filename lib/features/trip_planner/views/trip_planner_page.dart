@@ -1,120 +1,70 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/directions_utils.dart';
 import '../../../core/utils/format_utils.dart';
-import '../../../core/widgets/directions_button.dart';
 import '../../map/viewmodels/map_viewmodel.dart';
-import '../../observation/models/category_model.dart';
 import '../../observation/services/category_service.dart';
-import '../models/trip_plan.dart';
-import '../utils/trip_planning.dart';
+import '../models/route_preferences.dart';
+import '../utils/personalized_route_mapper.dart';
+import '../viewmodels/personalized_trip_viewmodel.dart';
+import '../widgets/route_insight_widgets.dart';
 import '../widgets/trip_route_preview.dart';
 
 const _timeBudgetOptions = [30, 60, 120, 180]; // phút
+const _maxStopsOptions = [3, 4, 6, 8];
 
-/// Trip Planning ("Discovery Route") — mở qua Navigator.push trực
-/// tiếp (không cần route riêng trong go_router, không cần tham số
-/// đường dẫn), giống cách ThenAndNowPage/EditObservationPage đã làm.
-class TripPlannerPage extends ConsumerStatefulWidget {
+String _timeLabel(int minutes) {
+  if (minutes < 60) return '$minutes phút';
+  return '${(minutes / 60).toStringAsFixed(minutes % 60 == 0 ? 0 : 1)} giờ';
+}
+
+/// Lên kế hoạch khám phá — lộ trình CÁ NHÂN HÓA do AI lập.
+///
+/// Mở qua Navigator.push trực tiếp (không cần route riêng trong
+/// go_router, không cần tham số đường dẫn), giống cách ThenAndNowPage/
+/// EditObservationPage đã làm.
+///
+/// Toàn bộ trạng thái và logic nằm ở [PersonalizedTripViewModel]; màn
+/// hình chỉ hiển thị: form yêu cầu khi chưa có kết quả, và kết quả (kèm
+/// hồ sơ sở thích + lý do từng điểm) khi đã có.
+class TripPlannerPage extends ConsumerWidget {
   const TripPlannerPage({super.key});
 
   @override
-  ConsumerState<TripPlannerPage> createState() => _TripPlannerPageState();
-}
-
-class _TripPlannerPageState extends ConsumerState<TripPlannerPage> {
-  int _selectedMinutes = 60;
-  final Set<String> _selectedCategoryIds = {};
-  bool _isPlanning = false;
-  String? _error;
-
-  TripPlan? _plan;
-  LatLng? _startLocation;
-
-  Future<void> _handleCreateTrip() async {
-    setState(() {
-      _isPlanning = true;
-      _error = null;
-    });
-
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) throw 'Vui lòng bật GPS/Dịch vụ vị trí.';
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        throw 'Bạn cần cấp quyền vị trí để lập kế hoạch chuyến đi.';
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      final start = LatLng(position.latitude, position.longitude);
-
-      final candidates = ref.read(mapObservationsProvider).valueOrNull ?? [];
-      if (candidates.isEmpty) {
-        throw 'Chưa có Observation nào quanh đây để lập kế hoạch.';
-      }
-
-      final plan = planTrip(
-        start: start,
-        candidates: candidates,
-        timeBudget: Duration(minutes: _selectedMinutes),
-        preferredCategoryIds: _selectedCategoryIds,
-      );
-
-      if (plan.isEmpty) {
-        throw 'Không tìm được lộ trình phù hợp trong thời gian này. '
-            'Thử tăng thời gian hoặc bỏ bớt bộ lọc danh mục.';
-      }
-
-      if (mounted) {
-        setState(() {
-          _startLocation = start;
-          _plan = plan;
-          _isPlanning = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isPlanning = false;
-          _error = e.toString();
-        });
-      }
-    }
-  }
-
-  void _reset() {
-    setState(() {
-      _plan = null;
-      _startLocation = null;
-      _error = null;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Giữ mapObservationsProvider "sống" trong lúc màn này mở, để lúc
     // bấm "Tạo lộ trình" luôn có dữ liệu sẵn sàng thay vì phải tự chờ
     // fetch từ đầu.
     ref.watch(mapObservationsProvider);
+    final state = ref.watch(personalizedTripViewModelProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Lên kế hoạch khám phá')),
-      body: _plan == null ? _buildForm(context) : _buildResult(context),
+      body:
+          state.hasResult ? _ResultView(state: state) : _FormView(state: state),
     );
   }
+}
 
-  Widget _buildForm(BuildContext context) {
+// ---------------------------------------------------------------------
+// FORM
+// ---------------------------------------------------------------------
+class _FormView extends ConsumerWidget {
+  final PersonalizedTripState state;
+
+  const _FormView({required this.state});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(personalizedTripViewModelProvider.notifier);
+    final prefs = state.preferences;
     final categoriesAsync = ref.watch(categoriesStreamProvider);
+    final observations = ref.watch(mapObservationsProvider).valueOrNull ?? [];
+    final tagSuggestions = suggestTags(observations);
+    final theme = Theme.of(context);
+
+    void update(RoutePreferences next) => notifier.setPreferences(next);
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -127,49 +77,67 @@ class _TripPlannerPageState extends ConsumerState<TripPlannerPage> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.route_outlined, color: AppColors.primary, size: 28),
+              const Icon(Icons.auto_awesome,
+                  color: AppColors.primary, size: 28),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Cho biết bạn có bao nhiêu thời gian, app sẽ tự gợi ý '
-                  'một lộ trình khám phá khép kín gần bạn.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  'Cho AI biết thời gian và sở thích của bạn, AI sẽ chọn và '
+                  'sắp xếp các điểm dừng sao cho hợp gu nhất trong thời gian '
+                  'đó. AI cũng học từ các bài bạn đã đăng và đã lưu.',
+                  style: theme.textTheme.bodySmall,
                 ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 24),
-        Text('Bạn có bao nhiêu thời gian?',
-            style: Theme.of(context).textTheme.titleSmall),
+
+        // ---- Thời gian ----
+        _SectionTitle('Bạn có bao nhiêu thời gian?'),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _timeBudgetOptions.map((minutes) {
-            final selected = _selectedMinutes == minutes;
-            final label = minutes < 60
-                ? '$minutes phút'
-                : '${(minutes / 60).toStringAsFixed(minutes % 60 == 0 ? 0 : 1)} giờ';
-            return ChoiceChip(
-              label: Text(label),
-              selected: selected,
-              onSelected: (_) => setState(() => _selectedMinutes = minutes),
-              selectedColor: AppColors.primary.withOpacity(0.18),
-              labelStyle: TextStyle(
-                color: selected ? AppColors.primaryDark : null,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
-            );
-          }).toList(),
+        _OptionChips<int>(
+          values: _timeBudgetOptions,
+          selected: prefs.timeBudgetMinutes,
+          labelOf: _timeLabel,
+          onSelected: (v) => update(prefs.copyWith(timeBudgetMinutes: v)),
         ),
         const SizedBox(height: 24),
-        Text('Ưu tiên danh mục nào? (tùy chọn)',
-            style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 4),
-        Text(
-          'Không chọn gì = xem xét tất cả danh mục như nhau.',
-          style: Theme.of(context).textTheme.bodySmall,
+
+        // ---- Nhịp đi bộ ----
+        _SectionTitle('Nhịp đi bộ của bạn'),
+        const SizedBox(height: 8),
+        _OptionChips<WalkingPace>(
+          values: WalkingPace.values,
+          selected: prefs.pace,
+          labelOf: (p) => '${p.label} (${p.speedKmh} km/h)',
+          onSelected: (v) => update(prefs.copyWith(pace: v)),
+        ),
+        const SizedBox(height: 24),
+
+        // ---- Số điểm dừng ----
+        _SectionTitle('Tối đa bao nhiêu điểm dừng?'),
+        const SizedBox(height: 8),
+        _OptionChips<int>(
+          values: _maxStopsOptions,
+          selected: prefs.maxStops,
+          labelOf: (v) => '$v điểm',
+          onSelected: (v) => update(prefs.copyWith(maxStops: v)),
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Quay về điểm xuất phát'),
+          subtitle: const Text('Tắt nếu bạn muốn kết thúc ở điểm dừng cuối.'),
+          value: prefs.roundTrip,
+          onChanged: (v) => update(prefs.copyWith(roundTrip: v)),
+        ),
+        const SizedBox(height: 16),
+
+        // ---- Chủ đề ----
+        _SectionTitle(
+          'Bạn thích chủ đề nào? (tùy chọn)',
+          subtitle: 'Không chọn gì: AI tự suy ra từ các bài bạn đã đăng/lưu.',
         ),
         const SizedBox(height: 8),
         categoriesAsync.when(
@@ -177,17 +145,19 @@ class _TripPlannerPageState extends ConsumerState<TripPlannerPage> {
             spacing: 8,
             runSpacing: 8,
             children: categories.map((c) {
-              final selected = _selectedCategoryIds.contains(c.id);
+              final selected = prefs.categoryIds.contains(c.id);
               return FilterChip(
                 label: Text('${c.icon} ${c.name}'),
                 selected: selected,
-                onSelected: (value) => setState(() {
+                onSelected: (value) {
+                  final next = {...prefs.categoryIds};
                   if (value) {
-                    _selectedCategoryIds.add(c.id);
+                    next.add(c.id);
                   } else {
-                    _selectedCategoryIds.remove(c.id);
+                    next.remove(c.id);
                   }
-                }),
+                  update(prefs.copyWith(categoryIds: next));
+                },
                 selectedColor: AppColors.primary.withOpacity(0.18),
                 labelStyle: TextStyle(
                   color: selected ? AppColors.primaryDark : null,
@@ -199,25 +169,82 @@ class _TripPlannerPageState extends ConsumerState<TripPlannerPage> {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Text('Lỗi tải danh mục: $e'),
         ),
-        const SizedBox(height: 28),
+
+        // ---- Thẻ gợi ý ----
+        if (tagSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          _SectionTitle(
+            'Thẻ bạn quan tâm (tùy chọn)',
+            subtitle: 'Các thẻ phổ biến quanh đây.',
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: tagSuggestions.map((tag) {
+              final selected = prefs.tags.contains(tag);
+              return FilterChip(
+                label: Text('#$tag'),
+                selected: selected,
+                onSelected: (value) {
+                  final next = {...prefs.tags};
+                  if (value) {
+                    next.add(tag);
+                  } else {
+                    next.remove(tag);
+                  }
+                  update(prefs.copyWith(tags: next));
+                },
+                selectedColor: AppColors.primary.withOpacity(0.18),
+                labelStyle: TextStyle(
+                  color: selected ? AppColors.primaryDark : null,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+        const SizedBox(height: 24),
+
+        // ---- Độ hiếm ----
+        _SectionTitle('Độ hiếm ưa thích'),
+        const SizedBox(height: 8),
+        _OptionChips<RarityPreference>(
+          values: RarityPreference.values,
+          selected: prefs.rarity,
+          labelOf: (r) => r.label,
+          onSelected: (v) => update(prefs.copyWith(rarity: v)),
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Ưu tiên chỗ bạn chưa ghi nhận'),
+          subtitle: const Text('Tránh lặp lại những nơi bạn đã đăng.'),
+          value: prefs.preferNewPlaces,
+          onChanged: (v) => update(prefs.copyWith(preferNewPlaces: v)),
+        ),
+        const SizedBox(height: 20),
+
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: _isPlanning ? null : _handleCreateTrip,
-            icon: _isPlanning
+            onPressed: state.isPlanning ? null : () => notifier.generate(),
+            icon: state.isPlanning
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
                   )
                 : const Icon(Icons.auto_awesome),
-            label: const Text('Tạo lộ trình'),
+            label: Text(
+                state.isPlanning ? 'AI đang lập lộ trình...' : 'Tạo lộ trình'),
           ),
         ),
-        if (_error != null) ...[
+        if (state.errorMessage != null) ...[
           const SizedBox(height: 12),
           Text(
-            _error!,
+            state.errorMessage!,
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppColors.error, fontSize: 13),
           ),
@@ -225,51 +252,88 @@ class _TripPlannerPageState extends ConsumerState<TripPlannerPage> {
       ],
     );
   }
+}
 
-  Widget _buildResult(BuildContext context) {
-    final plan = _plan!;
-    final start = _startLocation!;
+// ---------------------------------------------------------------------
+// KẾT QUẢ
+// ---------------------------------------------------------------------
+class _ResultView extends ConsumerWidget {
+  final PersonalizedTripState state;
+
+  const _ResultView({required this.state});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final plan = state.plan!;
+    final start = state.start!;
+    final ai = state.ai;
+    final theme = Theme.of(context);
+
+    final stats = <({IconData icon, String value, String label})>[
+      (
+        icon: Icons.place_outlined,
+        value: '${plan.stops.length}',
+        label: 'Điểm dừng',
+      ),
+      (
+        icon: Icons.route_outlined,
+        value: formatDistance(plan.totalDistanceMeters),
+        label: 'Quãng đường',
+      ),
+      (
+        icon: Icons.timer_outlined,
+        value: formatDuration(plan.estimatedTotalDuration),
+        label: 'Thời gian',
+      ),
+      if (ai != null)
+        (
+          icon: Icons.favorite_outline,
+          value: '${ai.route.avgMatchPercent}%',
+          label: 'Hợp gu TB',
+        ),
+    ];
 
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AiSourceBadge(personalized: ai != null),
+        ),
+        if (state.notice != null) ...[
+          const SizedBox(height: 10),
+          RouteNoticeBanner(message: state.notice!),
+        ],
+        const SizedBox(height: 12),
         TripRoutePreview(start: start, plan: plan),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Theme.of(context).dividerColor),
+            border: Border.all(color: theme.dividerColor),
           ),
           child: Row(
             children: [
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.place_outlined,
-                  value: '${plan.stops.length}',
-                  label: 'Điểm dừng',
+              for (var i = 0; i < stats.length; i++) ...[
+                if (i > 0)
+                  Container(width: 1, height: 36, color: theme.dividerColor),
+                Expanded(
+                  child: _StatItem(
+                    icon: stats[i].icon,
+                    value: stats[i].value,
+                    label: stats[i].label,
+                  ),
                 ),
-              ),
-              Container(width: 1, height: 36, color: Theme.of(context).dividerColor),
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.route_outlined,
-                  value: formatDistance(plan.totalDistanceMeters),
-                  label: 'Quãng đường',
-                ),
-              ),
-              Container(width: 1, height: 36, color: Theme.of(context).dividerColor),
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.timer_outlined,
-                  value: formatDuration(plan.estimatedTotalDuration),
-                  label: 'Thời gian',
-                ),
-              ),
+              ],
             ],
           ),
         ),
+        if (ai != null) ...[
+          const SizedBox(height: 16),
+          TasteProfileCard(profile: ai.profile),
+        ],
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
@@ -293,19 +357,88 @@ class _TripPlannerPageState extends ConsumerState<TripPlannerPage> {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton(
-            onPressed: _reset,
+            onPressed: () =>
+                ref.read(personalizedTripViewModelProvider.notifier).reset(),
             child: const Text('Lập lộ trình khác'),
           ),
         ),
         const SizedBox(height: 24),
-        Text('Các điểm dừng', style: Theme.of(context).textTheme.titleMedium),
+        Text('Các điểm dừng', style: theme.textTheme.titleMedium),
+        if (ai != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Mỗi điểm kèm lý do AI chọn nó.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
         const SizedBox(height: 12),
         for (var i = 0; i < plan.stops.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _TripStopTile(index: i + 1, stop: plan.stops[i]),
+            child: PersonalizedStopTile(index: i + 1, stop: plan.stops[i]),
           ),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------
+// WIDGET NHỎ DÙNG CHUNG TRONG TRANG
+// ---------------------------------------------------------------------
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+
+  const _SectionTitle(this.title, {this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: theme.textTheme.titleSmall),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(subtitle!, style: theme.textTheme.bodySmall),
+        ],
+      ],
+    );
+  }
+}
+
+/// Hàng ChoiceChip chọn 1 trong nhiều giá trị.
+class _OptionChips<T> extends StatelessWidget {
+  final List<T> values;
+  final T selected;
+  final String Function(T value) labelOf;
+  final ValueChanged<T> onSelected;
+
+  const _OptionChips({
+    required this.values,
+    required this.selected,
+    required this.labelOf,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: values.map((value) {
+        final isSelected = value == selected;
+        return ChoiceChip(
+          label: Text(labelOf(value)),
+          selected: isSelected,
+          onSelected: (_) => onSelected(value),
+          selectedColor: AppColors.primary.withOpacity(0.18),
+          labelStyle: TextStyle(
+            color: isSelected ? AppColors.primaryDark : null,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -315,7 +448,8 @@ class _StatItem extends StatelessWidget {
   final String value;
   final String label;
 
-  const _StatItem({required this.icon, required this.value, required this.label});
+  const _StatItem(
+      {required this.icon, required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -330,74 +464,6 @@ class _StatItem extends StatelessWidget {
                 ?.copyWith(fontWeight: FontWeight.w700)),
         Text(label, style: Theme.of(context).textTheme.labelSmall),
       ],
-    );
-  }
-}
-
-class _TripStopTile extends StatelessWidget {
-  final int index;
-  final TripStop stop;
-
-  const _TripStopTile({required this.index, required this.stop});
-
-  @override
-  Widget build(BuildContext context) {
-    final observation = stop.observation;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.primary,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              '$index',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${observation.categoryIcon} ${observation.title}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'Cách điểm trước ${formatDistance(stop.distanceFromPreviousMeters)} '
-                  '· ~${formatDuration(stop.walkingTimeFromPrevious)} đi bộ',
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-              ],
-            ),
-          ),
-          DirectionsButton(
-            latitude: observation.latitude,
-            longitude: observation.longitude,
-            compact: true,
-          ),
-        ],
-      ),
     );
   }
 }

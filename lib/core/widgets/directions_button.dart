@@ -39,7 +39,8 @@ class DirectionsButton extends StatelessWidget {
             color: AppColors.primary.withOpacity(0.10),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.directions, size: 20, color: AppColors.primary),
+          child:
+              const Icon(Icons.directions, size: 20, color: AppColors.primary),
         ),
       );
     }

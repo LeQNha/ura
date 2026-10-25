@@ -5,8 +5,9 @@ import '../../../core/theme/app_colors.dart';
 import '../models/trip_plan.dart';
 
 /// Bản đồ mini vẽ lại lộ trình đã lập kế hoạch — điểm xuất phát (icon
-/// người), các điểm dừng đánh số theo thứ tự, và đường nối khép kín
-/// quay về điểm xuất phát.
+/// người), các điểm dừng đánh số theo thứ tự, và đường nối. Nếu lộ
+/// trình khép kín ([TripPlan.isRoundTrip]) thì nối thêm chặng quay về
+/// điểm xuất phát, ngược lại dừng ở điểm cuối.
 ///
 /// Tự tính center/zoom từ phạm vi các điểm (không dùng fitCamera của
 /// flutter_map để tránh phụ thuộc API có thể khác nhau giữa các
@@ -24,10 +25,13 @@ class TripRoutePreview extends StatelessWidget {
   });
 
   ({LatLng center, double zoom}) _computeCameraFit() {
-    final points = [start, ...plan.stops.map((s) => LatLng(
-          s.observation.latitude,
-          s.observation.longitude,
-        ))];
+    final points = [
+      start,
+      ...plan.stops.map((s) => LatLng(
+            s.observation.latitude,
+            s.observation.longitude,
+          ))
+    ];
 
     if (points.length == 1) return (center: points.first, zoom: 15);
 
@@ -72,7 +76,9 @@ class TripRoutePreview extends StatelessWidget {
     final stopPoints = plan.stops
         .map((s) => LatLng(s.observation.latitude, s.observation.longitude))
         .toList();
-    final loopPoints = [start, ...stopPoints, start];
+    final loopPoints = plan.isRoundTrip
+        ? [start, ...stopPoints, start]
+        : [start, ...stopPoints];
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -82,7 +88,8 @@ class TripRoutePreview extends StatelessWidget {
           options: MapOptions(
             initialCenter: fit.center,
             initialZoom: fit.zoom,
-            interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+            interactionOptions:
+                const InteractionOptions(flags: InteractiveFlag.none),
           ),
           children: [
             TileLayer(

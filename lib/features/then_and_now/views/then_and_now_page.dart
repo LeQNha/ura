@@ -136,7 +136,8 @@ class _ThenAndNowPageState extends State<ThenAndNowPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.videocam_off_outlined, size: 44, color: Colors.white54),
+              const Icon(Icons.videocam_off_outlined,
+                  size: 44, color: Colors.white54),
               const SizedBox(height: 12),
               Text(_cameraError!,
                   textAlign: TextAlign.center,
@@ -159,8 +160,10 @@ class _ThenAndNowPageState extends State<ThenAndNowPage> {
       );
     }
 
+    // Camera chưa sẵn sàng (đang khởi tạo) — hiển thị vòng tròn chờ.
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white54));
+      return const Center(
+          child: CircularProgressIndicator(color: Colors.white54));
     }
 
     final cameraLayer = _buildCameraLayer();
@@ -228,10 +231,12 @@ class _ThenAndNowPageState extends State<ThenAndNowPage> {
                     shape: BoxShape.circle,
                     color: Colors.white,
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 6),
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.3), blurRadius: 6),
                     ],
                   ),
-                  child: const Icon(Icons.drag_indicator, size: 20, color: Colors.black54),
+                  child: const Icon(Icons.drag_indicator,
+                      size: 20, color: Colors.black54),
                 ),
               ),
             ],
@@ -326,7 +331,8 @@ class _ModeButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _ModeButton({required this.label, required this.selected, required this.onTap});
+  const _ModeButton(
+      {required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

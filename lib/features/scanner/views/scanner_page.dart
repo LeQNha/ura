@@ -27,7 +27,6 @@ const _radiusOptions = [200.0, 500.0, 1000.0];
 /// Nửa góc nhìn (FOV) coi là "trong khung hình camera" — ước lượng đơn
 /// giản (đa số camera sau của điện thoại có FOV ngang thực tế
 /// ~60-80°); có thể tinh chỉnh lại sau khi test trên thiết bị thật,
-/// đúng tinh thần "làm đại khái trước, cải thiện sau" đã thống nhất.
 const _halfFovDegrees = 40.0;
 
 class ScannerPage extends ConsumerStatefulWidget {

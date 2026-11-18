@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/providers/navigation_providers.dart';
 import '../../../core/services/nominatim_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../observation/models/observation_model.dart';
@@ -13,7 +16,6 @@ import '../widgets/address_search_sheet.dart';
 import '../widgets/map_filter_sheet.dart';
 import '../widgets/map_markers.dart';
 import '../widgets/map_search_bar.dart';
-import '../widgets/island_labels_layer.dart';
 import '../widgets/observation_preview_card.dart';
 import '../../ai/widgets/interesting_area_layer.dart';
 
@@ -23,6 +25,18 @@ import '../../ai/widgets/interesting_area_layer.dart';
 const _fallbackCenter = LatLng(16.0471, 108.2062);
 const _fallbackZoom = 5.0;
 
+/// Vị trí của tab Bản đồ trong `HomeShellPage._tabs` (Map = 0, Feed = 1,
+/// Scanner = 2). PHẢI khớp với thứ tự tab ở home_shell_page.dart — đổi
+/// thứ tự tab thì phải sửa cả hằng số này (cùng ràng buộc với
+/// `_scannerTabIndex` ở scanner_page.dart).
+const _mapTabIndex = 0;
+
+/// Mức zoom khi căn bản đồ vào vị trí người dùng lần đầu.
+const _initialLocationZoom = 14.0;
+
+/// Mức zoom khi bật chế độ "bám theo vị trí" (đi bộ nên zoom gần hơn).
+const _followZoom = 16.0;
+
 class MapPage extends ConsumerStatefulWidget {
   const MapPage({super.key});
 
@@ -30,16 +44,25 @@ class MapPage extends ConsumerStatefulWidget {
   ConsumerState<MapPage> createState() => _MapPageState();
 }
 
-class _MapPageState extends ConsumerState<MapPage> {
+class _MapPageState extends ConsumerState<MapPage> with WidgetsBindingObserver {
   final _mapController = MapController();
   final _searchController = TextEditingController();
 
-  LatLng? _userLocation;
-  bool _hasCenteredOnData = false;
+  /// Vị trí HIỆN TẠI của người dùng, được cập nhật liên tục khi họ di
+  /// chuyển. Dùng [ValueNotifier] thay vì `setState`: mỗi lần di chuyển chỉ
+  /// vẽ lại chấm xanh, không phải vẽ lại cả bản đồ cùng hàng trăm marker.
+  final _userLocationNotifier = ValueNotifier<LatLng?>(null);
+  LatLng? get _userLocation => _userLocationNotifier.value;
 
-  // Lưu mức zoom để nhãn Hoàng Sa / Trường Sa có thể đổi kích thước
-  // nhẹ theo mức phóng to, thu nhỏ của bản đồ.
-  double _mapZoom = _fallbackZoom;
+  /// Luồng GPS liên tục. `null` = đang không theo dõi.
+  StreamSubscription<Position>? _positionSub;
+  bool _startingTracking = false;
+
+  /// `true` = bản đồ tự dịch chuyển theo người dùng. Tự tắt khi họ kéo
+  /// hoặc zoom bản đồ bằng tay (xem `onPositionChanged` ở `build`).
+  bool _followUser = false;
+
+  bool _hasCenteredOnData = false;
 
   // "Tìm địa điểm" (Nominatim) — khác với ô search phía trên vốn lọc
   // Observation đang có, đây là kết quả tìm địa danh THẬT để bay bản
@@ -47,26 +70,57 @@ class _MapPageState extends ConsumerState<MapPage> {
   LatLng? _searchedLocation;
   String? _searchedLocationLabel;
 
+  /// Tab Bản đồ có đang được hiển thị không. `HomeShellPage` dùng
+  /// IndexedStack nên cả 3 tab đều "sống" cùng lúc; nếu không kiểm tra thì
+  /// GPS sẽ chạy ngầm cả khi người dùng đang ở tab khác, rất tốn pin.
+  bool get _isMapTabActive =>
+      ref.read(selectedTabIndexProvider) == _mapTabIndex;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchUserLocation());
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_isMapTabActive) _startTracking(centerOnFirstFix: true);
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _positionSub?.cancel();
+    _userLocationNotifier.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  /// Lấy vị trí user một cách "best-effort" — không chặn hay báo lỗi ồn
-  /// ào nếu thất bại, vì trên Map việc có vị trí chỉ là tiện ích thêm
-  /// (định vị "Vị trí của tôi", tính khoảng cách), không bắt buộc như ở
-  /// Create Observation.
-  Future<void> _fetchUserLocation({bool moveCamera = true}) async {
+  /// App xuống nền thì dừng GPS (tiết kiệm pin); quay lại thì chạy tiếp.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_isMapTabActive) _startTracking();
+    } else if (state == AppLifecycleState.paused) {
+      _stopTracking();
+    }
+  }
+
+  /// Bắt đầu THEO DÕI vị trí liên tục (thay cho việc chỉ lấy 1 lần như trước).
+  ///
+  /// Trên Map việc có vị trí chỉ là tiện ích thêm nên hàm này "best-effort":
+  /// không ném lỗi. Nó trả về thông báo lỗi tiếng Việt (để nơi gọi quyết
+  /// định có hiện hay không), hoặc `null` nếu ổn / đang theo dõi rồi.
+  ///
+  /// [centerOnFirstFix]: căn camera vào vị trí đầu tiên nhận được.
+  Future<String?> _startTracking({
+    bool centerOnFirstFix = false,
+    double zoom = _initialLocationZoom,
+  }) async {
+    if (_positionSub != null || _startingTracking) return null;
+    _startingTracking = true;
+
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) return 'Vui lòng bật GPS/Dịch vụ vị trí.';
 
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -74,22 +128,104 @@ class _MapPageState extends ConsumerState<MapPage> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        return;
+        return 'Bạn cần cấp quyền vị trí để xem vị trí của mình trên bản đồ.';
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
+      // (1) Vị trí đầu tiên: lấy nhanh (độ chính xác vừa) để chấm xanh hiện
+      //     sớm. Thất bại thì bỏ qua, bước (2) sẽ lo tiếp.
+      try {
+        final first = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high, //medium
+          timeLimit: const Duration(seconds: 8),
+        );
+        if (!mounted) return null;
+        _applyPosition(
+          first,
+          move: centerOnFirstFix || _followUser,
+          zoom: zoom,
+        );
+      } catch (_) {
+        // Chưa lấy được ngay: vẫn đăng ký luồng bên dưới, vị trí sẽ tới sau.
+      }
+
+      // (2) Theo dõi liên tục: mỗi lần người dùng di chuyển ≥ 5 mét thì
+      //     nhận 1 vị trí mới và cập nhật chấm xanh.
+      if (!mounted || !_isMapTabActive || _positionSub != null) return null;
+      _positionSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5,
+        ),
+      ).listen(
+        (position) {
+          if (!mounted) return;
+          _applyPosition(position, move: _followUser, zoom: _followZoom);
+        },
+        // GPS bị tắt giữa chừng, mất quyền... → dừng; lần bật lại tab hoặc
+        // bấm nút vị trí sẽ thử khởi động lại.
+        onError: (_) => _stopTracking(),
       );
-      if (!mounted) return;
-
-      final latLng = LatLng(position.latitude, position.longitude);
-      setState(() => _userLocation = latLng);
-
-      if (moveCamera) {
-        _mapController.move(latLng, 14);
-      }
+      return null;
     } catch (_) {
-      // Nuốt lỗi có chủ đích — xem docstring ở trên.
+      return 'Không thể xác định vị trí của bạn.';
+    } finally {
+      _startingTracking = false;
+    }
+  }
+
+  void _stopTracking() {
+    _positionSub?.cancel();
+    _positionSub = null;
+  }
+
+  /// Ghi nhận vị trí mới: cập nhật chấm xanh, và nếu [move] thì dời camera.
+  void _applyPosition(
+    Position position, {
+    required bool move,
+    required double zoom,
+  }) {
+    final latLng = LatLng(position.latitude, position.longitude);
+    _userLocationNotifier.value = latLng;
+    if (move) _safeMove(latLng, zoom);
+  }
+
+  void _safeMove(LatLng target, double zoom) {
+    try {
+      _mapController.move(target, zoom);
+    } catch (_) {
+      // Bản đồ chưa sẵn sàng (vừa mở) → bỏ qua, lần cập nhật sau sẽ thử lại.
+    }
+  }
+
+  /// Nút "Vị trí của tôi":
+  ///   - đang bám theo  → bấm để TẮT bám theo (camera đứng yên);
+  ///   - chưa bám theo → căn camera vào vị trí hiện tại và BẬT bám theo.
+  Future<void> _onMyLocationPressed() async {
+    //if để tránh bấm liên tục nhiều lần -> GPS bị khởi động lại nhiều lần, gây lag.
+    if (_followUser) {
+      setState(() => _followUser = false);
+      return;
+    }
+
+    setState(() => _followUser = true);
+
+    final current = _userLocation;
+    if (_positionSub != null && current != null) {
+      _safeMove(current, _followZoom);
+      return;
+    }
+
+    // Chưa theo dõi / chưa có vị trí: khởi động, camera sẽ tự căn khi có
+    // vị trí đầu tiên.
+    final error = await _startTracking(
+      centerOnFirstFix: true,
+      zoom: _followZoom,
+    );
+    if (!mounted) return;
+    if (error != null) {
+      setState(() => _followUser = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error)));
     }
   }
 
@@ -99,6 +235,7 @@ class _MapPageState extends ConsumerState<MapPage> {
     }
     _hasCenteredOnData = true;
 
+    // những cái này để tính trung bình tọa độ của tất cả các observation, để căn bản đồ vào giữa chúng.
     final avgLat = observations.map((o) => o.latitude).reduce((a, b) => a + b) /
         observations.length;
     final avgLng =
@@ -171,6 +308,16 @@ class _MapPageState extends ConsumerState<MapPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Chỉ theo dõi GPS khi đang đứng ở tab Bản đồ: rời tab thì dừng, quay
+    // lại thì chạy tiếp.
+    ref.listen<int>(selectedTabIndexProvider, (previous, next) {
+      if (next == _mapTabIndex) {
+        _startTracking();
+      } else {
+        _stopTracking();
+      }
+    });
+
     final observations = ref.watch(filteredMapObservationsProvider);
     final filter = ref.watch(mapFilterProvider);
 
@@ -186,18 +333,11 @@ class _MapPageState extends ConsumerState<MapPage> {
               initialZoom: _fallbackZoom,
               minZoom: 3,
               maxZoom: 19,
-              // onPositionChanged: (camera, hasGesture) {
-              //   // Chỉ rebuild khi zoom thay đổi đủ rõ rệt, tránh setState
-              //   // liên tục trong lúc người dùng kéo bản đồ.
-              //   if ((camera.zoom - _mapZoom).abs() >= 0.25) {
-              //     setState(() => _mapZoom = camera.zoom);
-              //   }
-              // },
-              onPositionChanged: (camera, hasGesture) {
-                final zoom = camera.zoom;
-
-                if (zoom != null && (zoom - _mapZoom).abs() >= 0.25) {
-                  setState(() => _mapZoom = zoom);
+              // Người dùng tự kéo/zoom bản đồ → ngừng bám theo vị trí, để
+              // không giằng co với thao tác của họ.
+              onPositionChanged: (_, hasGesture) {
+                if (hasGesture && _followUser) {
+                  setState(() => _followUser = false);
                 }
               },
             ),
@@ -244,15 +384,22 @@ class _MapPageState extends ConsumerState<MapPage> {
                       ClusterBubble(count: markers.length),
                 ),
               ),
-              if (_userLocation != null)
-                MarkerLayer(markers: [
-                  Marker(
-                    point: _userLocation!,
-                    width: 22,
-                    height: 22,
-                    child: const _UserLocationDot(),
-                  ),
-                ]),
+              // Chấm xanh vị trí hiện tại — cập nhật real-time. Bọc trong
+              // ValueListenableBuilder nên mỗi lần di chuyển chỉ lớp này vẽ lại.
+              ValueListenableBuilder<LatLng?>(
+                valueListenable: _userLocationNotifier,
+                builder: (context, userLocation, _) {
+                  if (userLocation == null) return const SizedBox.shrink();
+                  return MarkerLayer(markers: [
+                    Marker(
+                      point: userLocation,
+                      width: 22,
+                      height: 22,
+                      child: const _UserLocationDot(),
+                    ),
+                  ]);
+                },
+              ),
               if (_searchedLocation != null)
                 MarkerLayer(markers: [
                   Marker(
@@ -262,9 +409,6 @@ class _MapPageState extends ConsumerState<MapPage> {
                     child: const _SearchedLocationPin(),
                   ),
                 ]),
-              // Nhãn địa lý được gắn theo tọa độ thật trên bản đồ,
-              // vì vậy chúng di chuyển theo bản đồ và vẫn đúng vị trí khi zoom.
-              IslandLabelsLayer(zoom: _mapZoom),
             ],
           ),
 
@@ -386,10 +530,17 @@ class _MapPageState extends ConsumerState<MapPage> {
                 FloatingActionButton(
                   heroTag: 'my_location',
                   mini: true,
-                  backgroundColor: AppColors.surfaceLight,
-                  foregroundColor: AppColors.primaryDark,
-                  onPressed: () => _fetchUserLocation(moveCamera: true),
-                  child: const Icon(Icons.my_location),
+                  backgroundColor:
+                      _followUser ? AppColors.primary : AppColors.surfaceLight,
+                  foregroundColor:
+                      _followUser ? Colors.white : AppColors.primaryDark,
+                  tooltip: _followUser
+                      ? 'Đang bám theo vị trí của bạn (bấm để tắt)'
+                      : 'Vị trí của tôi',
+                  onPressed: _onMyLocationPressed,
+                  child: Icon(
+                    _followUser ? Icons.gps_fixed : Icons.my_location,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 FloatingActionButton.extended(

@@ -18,6 +18,7 @@ import '../widgets/map_markers.dart';
 import '../widgets/map_search_bar.dart';
 import '../widgets/observation_preview_card.dart';
 import '../../ai/widgets/interesting_area_layer.dart';
+import '../widgets/island_labels_layer.dart';
 
 /// Tọa độ fallback khi chưa xác định được vị trí user và chưa có
 /// Observation nào để tự căn giữa bản đồ — trung tâm địa lý Việt Nam.
@@ -63,6 +64,7 @@ class _MapPageState extends ConsumerState<MapPage> with WidgetsBindingObserver {
   bool _followUser = false;
 
   bool _hasCenteredOnData = false;
+  double _mapZoom = _fallbackZoom;
 
   // "Tìm địa điểm" (Nominatim) — khác với ô search phía trên vốn lọc
   // Observation đang có, đây là kết quả tìm địa danh THẬT để bay bản
@@ -335,9 +337,30 @@ class _MapPageState extends ConsumerState<MapPage> with WidgetsBindingObserver {
               maxZoom: 19,
               // Người dùng tự kéo/zoom bản đồ → ngừng bám theo vị trí, để
               // không giằng co với thao tác của họ.
-              onPositionChanged: (_, hasGesture) {
-                if (hasGesture && _followUser) {
-                  setState(() => _followUser = false);
+              // onPositionChanged: (_, hasGesture) {
+              //   if (hasGesture && _followUser) {
+              //     setState(() => _followUser = false);
+              //   }
+              // },
+              onPositionChanged: (camera, hasGesture) {
+                final currentZoom = camera.zoom ?? _mapZoom;
+                // Kiểm tra mức zoom có thay đổi đủ lớn hay không.
+                final zoomChanged = (currentZoom - _mapZoom).abs() >= 0.25;
+
+                // Người dùng tự kéo hoặc zoom bản đồ
+                // thì ngừng chế độ bám theo vị trí.
+                final shouldStopFollowing = hasGesture && _followUser;
+
+                if (zoomChanged || shouldStopFollowing) {
+                  setState(() {
+                    if (zoomChanged) {
+                      _mapZoom = currentZoom;
+                    }
+
+                    if (shouldStopFollowing) {
+                      _followUser = false;
+                    }
+                  });
                 }
               },
             ),
@@ -409,21 +432,27 @@ class _MapPageState extends ConsumerState<MapPage> with WidgetsBindingObserver {
                     child: const _SearchedLocationPin(),
                   ),
                 ]),
+              IslandLabelsLayer(zoom: _mapZoom),
             ],
           ),
 
           // Attribution bắt buộc theo license OpenStreetMap (ODbL).
-          Positioned(
+          // Positioned(
+          //   left: 8,
+          //   bottom: 8,
+          //   child: Container(
+          //     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          //     color: Colors.white.withOpacity(0.75),
+          //     child: const Text(
+          //       '© OpenStreetMap contributors',
+          //       style: TextStyle(fontSize: 9, color: Colors.black87),
+          //     ),
+          //   ),
+          // ),
+          const Positioned(
             left: 8,
             bottom: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              color: Colors.white.withOpacity(0.75),
-              child: const Text(
-                '© OpenStreetMap contributors',
-                style: TextStyle(fontSize: 9, color: Colors.black87),
-              ),
-            ),
+            child: _OsmAttribution(),
           ),
 
           // Search bar + filter
@@ -626,6 +655,48 @@ class _SearchedLocationPin extends StatelessWidget {
           Shadow(color: Colors.black.withOpacity(0.3), blurRadius: 4),
         ]),
       ],
+    );
+  }
+}
+
+class _OsmAttribution extends StatefulWidget {
+  const _OsmAttribution();
+
+  @override
+  State<_OsmAttribution> createState() => _OsmAttributionState();
+}
+
+class _OsmAttributionState extends State<_OsmAttribution> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => setState(() => _open = !_open),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 150),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.75),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.info_outline, size: 14, color: Colors.black54),
+              if (_open)
+                const Padding(
+                  padding: EdgeInsets.only(left: 4, right: 4),
+                  child: Text(
+                    '© OpenStreetMap contributors',
+                    style: TextStyle(fontSize: 10, color: Colors.black87),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

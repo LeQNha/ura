@@ -3,19 +3,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/state_widgets.dart';
+import '../../auth/models/user_model.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
+import '../../gamification/utils/level_utils.dart';
 import '../../observation/viewmodels/observation_feed_viewmodel.dart';
 import '../../observation/widgets/observation_card.dart';
 import '../../trip_planner/views/trip_planner_page.dart';
 
 /// Feed các Observation mới nhất.
 ///
-/// Bản nâng cấp giao diện: AppBar chuyển thành header 2 dòng (tên app
-/// + lời chào theo tên user) với avatar có viền gradient, mục tài
-/// khoản trong bottom sheet được nhóm lại có tiêu đề nhóm + header hồ
-/// sơ nổi bật, empty state dùng chung EmptyStateWidget đã nâng cấp.
-/// TOÀN BỘ hành vi/điều hướng giữ nguyên — chỉ đổi cách trình bày.
+/// Bản nâng cấp lần 2: đầu feed có thêm (1) thanh tiến độ XP bấm được
+/// dẫn tới Thành tích và (2) hàng lối tắt 4 tính năng (Nhiệm vụ, Thành
+/// tích, Lộ trình, Gợi ý) — trước đây các tính năng này bị giấu sâu
+/// trong bottom sheet tài khoản. Toàn bộ điều hướng/logic cũ giữ nguyên.
 class HomeFeedPage extends ConsumerWidget {
   const HomeFeedPage({super.key});
 
@@ -23,6 +25,7 @@ class HomeFeedPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final feedAsync = ref.watch(observationFeedProvider);
     final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final brightness = Theme.of(context).brightness;
 
     return Scaffold(
       appBar: AppBar(
@@ -39,7 +42,7 @@ class HomeFeedPage extends ConsumerWidget {
             const SizedBox(height: 1),
             Text(
               currentUser != null
-                  ? 'Chào @${currentUser.username} · Level ${currentUser.level}'
+                  ? 'Chào @${currentUser.username} 👋'
                   : 'Dấu vết đô thị quanh bạn',
               style: Theme.of(context).textTheme.labelMedium,
             ),
@@ -58,7 +61,7 @@ class HomeFeedPage extends ConsumerWidget {
                 ),
                 child: CircleAvatar(
                   radius: 18,
-                  backgroundColor: AppColors.surfaceLight,
+                  backgroundColor: AppColors.surfaceOf(brightness),
                   child: currentUser?.avatarUrl != null
                       ? CircleAvatar(
                           radius: 16,
@@ -69,10 +72,10 @@ class HomeFeedPage extends ConsumerWidget {
                           (currentUser?.username.isNotEmpty ?? false)
                               ? currentUser!.username[0].toUpperCase()
                               : '?',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.primaryDark,
+                            color: AppColors.primaryTextOf(brightness),
                           ),
                         ),
                 ),
@@ -81,10 +84,16 @@ class HomeFeedPage extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/create-observation'),
-        icon: const Icon(Icons.add_a_photo_rounded),
-        label: const Text('Ghi nhận'),
+      floatingActionButton: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: AppColors.softShadow(opacity: 0.35, blur: 20),
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: () => context.push('/create-observation'),
+          icon: const Icon(Icons.add_a_photo_rounded),
+          label: const Text('Ghi nhận'),
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -106,15 +115,21 @@ class HomeFeedPage extends ConsumerWidget {
                 ),
               );
             }
-            return ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-              itemCount: observations.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
+            return ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
+              itemCount: observations.length + 1,
               itemBuilder: (context, index) {
-                final observation = observations[index];
-                return ObservationCard(
-                  observation: observation,
-                  onTap: () => context.push('/observation/${observation.id}'),
+                if (index == 0) {
+                  return _FeedHeader(user: currentUser);
+                }
+                final observation = observations[index - 1];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: ObservationCard(
+                    observation: observation,
+                    onTap: () => context.push('/observation/${observation.id}'),
+                  ),
                 );
               },
             );
@@ -131,12 +146,11 @@ class HomeFeedPage extends ConsumerWidget {
 
   void _showAccountSheet(BuildContext context, WidgetRef ref) {
     final user = ref.read(currentUserProvider).valueOrNull;
+    final brightness = Theme.of(context).brightness;
+
     showModalBottomSheet<void>(
       context: context,
-      // Bắt buộc thêm — không có dòng này, bottom sheet bị giới hạn
-      // chiều cao mặc định (khoảng nửa màn hình) và KHÔNG cho phép nội
-      // dung bên trong vượt quá đó dù có bọc ScrollView, dẫn đến lỗi
-      // tràn layout (overflow) khi danh sách mục dài hơn khung hình.
+      // Cần để nội dung dài không bị giới hạn ~nửa màn hình (tránh overflow).
       isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: SingleChildScrollView(
@@ -148,14 +162,12 @@ class HomeFeedPage extends ConsumerWidget {
                 width: 42,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDAD7D0),
+                  color: AppColors.borderOf(brightness),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(height: 18),
               if (user != null) ...[
-                // Header hồ sơ — avatar lớn viền gradient + tên + chip
-                // Level/XP, thay cho 3 dòng chữ rời rạc trước đây.
                 Container(
                   padding: const EdgeInsets.all(3),
                   decoration: const BoxDecoration(
@@ -163,8 +175,8 @@ class HomeFeedPage extends ConsumerWidget {
                     gradient: AppColors.primaryGradient,
                   ),
                   child: CircleAvatar(
-                    radius: 30,
-                    backgroundColor: AppColors.surfaceLight,
+                    radius: 32,
+                    backgroundColor: AppColors.surfaceOf(brightness),
                     backgroundImage: user.avatarUrl != null
                         ? NetworkImage(user.avatarUrl!)
                         : null,
@@ -173,10 +185,10 @@ class HomeFeedPage extends ConsumerWidget {
                             user.username.isNotEmpty
                                 ? user.username[0].toUpperCase()
                                 : '?',
-                            style: const TextStyle(
-                              fontSize: 22,
+                            style: TextStyle(
+                              fontSize: 24,
                               fontWeight: FontWeight.w800,
-                              color: AppColors.primaryDark,
+                              color: AppColors.primaryTextOf(brightness),
                             ),
                           )
                         : null,
@@ -204,15 +216,15 @@ class HomeFeedPage extends ConsumerWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.bolt_rounded,
-                          size: 15, color: AppColors.primaryDark),
+                      Icon(Icons.bolt_rounded,
+                          size: 15, color: AppColors.primaryTextOf(brightness)),
                       const SizedBox(width: 4),
                       Text(
                         'Level ${user.level} · ${user.xp} XP',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.primaryDark,
+                          color: AppColors.primaryTextOf(brightness),
                         ),
                       ),
                     ],
@@ -296,9 +308,7 @@ class HomeFeedPage extends ConsumerWidget {
                   ref.read(authViewModelProvider.notifier).logout();
                 },
               ),
-              // Đệm thêm dưới cùng — trên vài dòng máy có gesture bar
-              // (thanh cử chỉ), nếu không có đệm này nút "Đăng xuất"
-              // dễ bị dính sát/khuất sau gesture bar.
+              // Đệm dưới cùng cho máy có gesture bar.
               SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
             ],
           ),
@@ -308,8 +318,236 @@ class HomeFeedPage extends ConsumerWidget {
   }
 }
 
-/// Nhãn nhóm nhỏ phân tách các mục trong bottom sheet tài khoản —
-/// giúp danh sách dài dễ quét mắt hơn thay vì 1 dãy ListTile liền mạch.
+/// Phần đầu feed: thanh XP + lối tắt tính năng + tiêu đề mục.
+class _FeedHeader extends StatelessWidget {
+  final UserModel? user;
+
+  const _FeedHeader({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (user != null) ...[
+          _XpStrip(user: user!),
+          const SizedBox(height: 16),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.flag_rounded,
+                label: 'Nhiệm vụ',
+                color: AppColors.primary,
+                onTap: () => context.push('/missions'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.emoji_events_rounded,
+                label: 'Thành tích',
+                color: AppColors.accent,
+                onTap: () => context.push('/achievements'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.route_rounded,
+                label: 'Lộ trình',
+                color: AppColors.rarityRare,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const TripPlannerPage()),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.auto_awesome_rounded,
+                label: 'Gợi ý',
+                color: const Color(0xFF8E5BD6),
+                onTap: () => context.push('/recommendations'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 22),
+        const SectionHeader(
+          title: 'Mới được ghi nhận',
+          subtitle: 'Những dấu vết đô thị cộng đồng vừa tìm thấy',
+        ),
+        const SizedBox(height: 14),
+      ],
+    );
+  }
+}
+
+class _XpStrip extends StatelessWidget {
+  final UserModel user;
+
+  const _XpStrip({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final progress = levelProgress(user.xp, user.level);
+    final next = xpThresholdForLevel(user.level + 1);
+
+    return Material(
+      color: AppColors.surfaceOf(brightness),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => context.push('/achievements'),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.borderOf(brightness)),
+            boxShadow: AppColors.cardShadow(
+              isDark: brightness == Brightness.dark,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: AppColors.primaryGradient,
+                  boxShadow: AppColors.softShadow(
+                    opacity: 0.3,
+                    blur: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '${user.level}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Cấp ${user.level}',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${user.xp} / $next XP',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: progress),
+                        duration: const Duration(milliseconds: 700),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, _) => LinearProgressIndicator(
+                          value: value,
+                          minHeight: 8,
+                          backgroundColor: AppColors.primary.withOpacity(0.14),
+                          valueColor: const AlwaysStoppedAnimation(
+                            AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textSecondaryOf(brightness),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+
+    return Material(
+      color: AppColors.surfaceOf(brightness),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.borderOf(brightness)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.13),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, size: 22, color: color),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Nhãn nhóm nhỏ phân tách các mục trong bottom sheet tài khoản.
 class _SheetSectionLabel extends StatelessWidget {
   final String text;
 
@@ -333,8 +571,7 @@ class _SheetSectionLabel extends StatelessWidget {
   }
 }
 
-/// Mục trong bottom sheet tài khoản — icon nằm trong khối bo tròn nền
-/// nhạt (thay icon trần), tạo nhịp thị giác đều đặn giữa các dòng.
+/// Mục trong bottom sheet tài khoản — icon nằm trong khối bo tròn nền nhạt.
 class _SheetTile extends StatelessWidget {
   final IconData icon;
   final String label;

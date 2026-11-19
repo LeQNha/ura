@@ -1,49 +1,71 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 
-/// Hiển thị Category dạng "pill" gọn (icon + tên) — dùng ở Card và
-/// Detail. Tách riêng widget để đảm bảo Category luôn hiển thị nhất
-/// quán mọi nơi trong app, chỉ cần sửa 1 chỗ nếu muốn đổi style sau này.
+/// Hiển thị Category dạng "pill" gọn (icon + tên) — dùng ở Card và Detail.
 ///
-/// Bản nâng cấp: icon nằm trong khối tròn nền trắng nổi lên trên nền
-/// pill (giống nhãn dán 2 lớp), viền mảnh thay vì chỉ đổ màu phẳng —
-/// giữ nguyên constructor `CategoryPill({icon, name})`.
+/// [onImage] = true khi pill nằm ĐÈ LÊN ảnh: dùng nền kính tối + chữ trắng
+/// để luôn đọc được (bản cũ dùng chữ amber đậm trên nền ảnh tối nên rất
+/// khó đọc). Mặc định false → kiểu nhãn amber nhạt cho nền thường.
+///
+/// Giữ nguyên constructor cũ `CategoryPill({icon, name})`; `onImage` là
+/// tham số tùy chọn.
 class CategoryPill extends StatelessWidget {
   final String icon;
   final String name;
+  final bool onImage;
 
-  const CategoryPill({super.key, required this.icon, required this.name});
+  const CategoryPill({
+    super.key,
+    required this.icon,
+    required this.name,
+    this.onImage = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final textColor =
+        onImage ? Colors.white : AppColors.primaryTextOf(brightness);
+
     return Container(
       padding: const EdgeInsets.only(left: 4, right: 12, top: 4, bottom: 4),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.09),
+        color: onImage
+            ? Colors.black.withOpacity(0.42)
+            : AppColors.primary
+                .withOpacity(brightness == Brightness.dark ? 0.16 : 0.09),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withOpacity(0.18)),
+        border: Border.all(
+          color: onImage
+              ? Colors.white.withOpacity(0.28)
+              : AppColors.primary.withOpacity(0.2),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 20,
-            height: 20,
+            width: 22,
+            height: 22,
             decoration: const BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: Text(icon, style: const TextStyle(fontSize: 11)),
+            child: Text(icon, style: const TextStyle(fontSize: 12)),
           ),
           const SizedBox(width: 6),
-          Text(
-            name,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primaryDark,
-              letterSpacing: 0.1,
+          Flexible(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+                letterSpacing: 0.1,
+              ),
             ),
           ),
         ],

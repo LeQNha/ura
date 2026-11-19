@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/gradient_button.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../widgets/auth_header.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -32,8 +33,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           password: _passwordController.text,
         );
 
-    // Không cần tự điều hướng ở đây khi thành công — go_router redirect
-    // sẽ tự chuyển sang /home ngay khi authStateChanges phát ra user mới.
+    // Thành công → go_router redirect tự chuyển sang /home.
     if (!success && mounted) {
       final error = ref.read(authViewModelProvider).error;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -46,60 +46,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
     final isLoading = authState.isLoading;
-    final topInset = MediaQuery.of(context).padding.top;
+    final theme = Theme.of(context);
 
     return Scaffold(
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Dải header gradient — bo tròn 2 góc dưới, tràn tới mép
-            // trên màn hình (không SafeArea trực tiếp) để có cảm giác
-            // "edge-to-edge" cao cấp hơn, tự chừa khoảng trống bằng
-            // đúng chiều cao status bar thay vì SafeArea mặc định.
-            Container(
-              padding: EdgeInsets.fromLTRB(24, topInset + 28, 24, 34),
-              decoration: const BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.18),
-                      border: Border.all(color: Colors.white.withOpacity(0.5)),
-                    ),
-                    child: const Icon(Icons.explore_outlined,
-                        color: Colors.white, size: 30),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Chào mừng trở lại',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Đăng nhập để tiếp tục khám phá thành phố.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withOpacity(0.9),
-                        ),
-                  ),
-                ],
-              ),
+            const AuthHeader(
+              icon: Icons.explore_outlined,
+              title: 'Chào mừng\ntrở lại',
+              subtitle: 'Đăng nhập để tiếp tục khám phá thành phố.',
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+            AuthFormCard(
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -108,6 +67,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
                         labelText: 'Email',
                         prefixIcon: Icon(Icons.email_outlined),
@@ -122,10 +82,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     TextFormField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) {
+                        if (!isLoading) _handleLogin();
+                      },
                       decoration: InputDecoration(
                         labelText: 'Mật khẩu',
                         prefixIcon: const Icon(Icons.lock_outline),
@@ -157,37 +121,31 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         child: const Text('Quên mật khẩu?'),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
+                    const SizedBox(height: 4),
+                    GradientButton(
+                      label: 'Đăng nhập',
+                      isLoading: isLoading,
                       onPressed: isLoading ? null : _handleLogin,
-                      child: isLoading
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Đăng nhập'),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('Chưa có tài khoản?'),
-                        TextButton(
-                          onPressed: isLoading
-                              ? null
-                              : () => context.push('/register'),
-                          child: const Text('Đăng ký'),
-                        ),
-                      ],
                     ),
                   ],
                 ),
               ),
             ),
+            Transform.translate(
+              offset: const Offset(0, -14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Chưa có tài khoản?', style: theme.textTheme.bodyMedium),
+                  TextButton(
+                    onPressed:
+                        isLoading ? null : () => context.push('/register'),
+                    child: const Text('Đăng ký ngay'),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom),
           ],
         ),
       ),

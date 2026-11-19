@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/gradient_button.dart';
 import '../../../core/widgets/state_widgets.dart';
 import '../../auth/models/user_model.dart';
 import '../../auth/viewmodels/auth_viewmodel.dart';
@@ -9,6 +10,12 @@ import '../models/mission_model.dart';
 import '../repositories/mission_repository.dart';
 import '../services/mission_service.dart';
 
+/// Danh sách Nhiệm vụ.
+///
+/// Bản nâng cấp: banner tổng quan (đã hoàn thành / tổng + XP có thể nhận),
+/// thẻ nhiệm vụ có icon trong khối bo tròn, trạng thái (Đang làm / Sẵn
+/// sàng nhận / Hoàn thành), thanh tiến độ gradient có animation. Logic
+/// tải tiến độ + nhận thưởng giữ nguyên.
 class MissionsPage extends ConsumerWidget {
   const MissionsPage({super.key});
 
@@ -26,14 +33,31 @@ class MissionsPage extends ConsumerWidget {
                 if (missions.isEmpty) {
                   return const _EmptyMissionsCard();
                 }
-                return ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: missions.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) => _MissionCard(
-                    mission: missions[index],
-                    user: currentUser,
-                  ),
+                final completedIds = ref
+                        .watch(_completedIdsProvider(currentUser.id))
+                        .valueOrNull ??
+                    <String>[];
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                  itemCount: missions.length + 1,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _SummaryBanner(
+                          missions: missions,
+                          completedIds: completedIds,
+                        ),
+                      );
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _MissionCard(
+                        mission: missions[index - 1],
+                        user: currentUser,
+                      ),
+                    );
+                  },
                 );
               },
               loading: () => const LoadingStateWidget(),
@@ -42,6 +66,96 @@ class MissionsPage extends ConsumerWidget {
                 onRetry: () => ref.invalidate(missionsStreamProvider),
               ),
             ),
+    );
+  }
+}
+
+class _SummaryBanner extends StatelessWidget {
+  final List<MissionModel> missions;
+  final List<String> completedIds;
+
+  const _SummaryBanner({required this.missions, required this.completedIds});
+
+  @override
+  Widget build(BuildContext context) {
+    final total = missions.length;
+    final done = missions.where((m) => completedIds.contains(m.id)).length;
+    final pendingXp = missions
+        .where((m) => !completedIds.contains(m.id))
+        .fold<int>(0, (sum, m) => sum + m.rewardXp);
+    final ratio = total == 0 ? 0.0 : done / total;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: AppColors.heroGradient,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: AppColors.softShadow(opacity: 0.25, blur: 24),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 68,
+            height: 68,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 68,
+                  height: 68,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: ratio),
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) => CircularProgressIndicator(
+                      value: value,
+                      strokeWidth: 6,
+                      backgroundColor: Colors.white.withOpacity(0.25),
+                      valueColor: const AlwaysStoppedAnimation(Colors.white),
+                    ),
+                  ),
+                ),
+                Text(
+                  '$done/$total',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  done == total && total > 0
+                      ? 'Hoàn thành tất cả! 🎉'
+                      : 'Tiến độ nhiệm vụ',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  pendingXp > 0
+                      ? 'Còn $pendingXp XP đang chờ bạn chinh phục'
+                      : 'Bạn đã nhận toàn bộ phần thưởng',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 12.5,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -70,10 +184,12 @@ class _MissionCardState extends ConsumerState<_MissionCard> {
   Future<void> _loadProgress() async {
     final repo = ref.read(missionRepositoryProvider);
     final value = await repo.getProgress(widget.user, widget.mission);
-    if (mounted) setState(() {
-      _progress = value;
-      _loadingProgress = false;
-    });
+    if (mounted) {
+      setState(() {
+        _progress = value;
+        _loadingProgress = false;
+      });
+    }
   }
 
   Future<void> _claim() async {
@@ -98,6 +214,8 @@ class _MissionCardState extends ConsumerState<_MissionCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final brightness = theme.brightness;
     final mission = widget.mission;
     final completedIdsAsync = ref.watch(_completedIdsProvider(widget.user.id));
     final completedIds = completedIdsAsync.valueOrNull ?? [];
@@ -107,57 +225,109 @@ class _MissionCardState extends ConsumerState<_MissionCard> {
     final ratio = (progress / mission.targetValue).clamp(0.0, 1.0);
     final canClaim = !isCompleted && progress >= mission.targetValue;
 
+    final Color tint = isCompleted
+        ? AppColors.success
+        : (canClaim ? AppColors.accent : AppColors.primary);
+    final String status =
+        isCompleted ? 'Hoàn thành' : (canClaim ? 'Sẵn sàng nhận' : 'Đang làm');
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isCompleted
-            ? AppColors.success.withOpacity(0.06)
-            : Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
+            ? Color.alphaBlend(
+                AppColors.success.withOpacity(0.06),
+                AppColors.surfaceOf(brightness),
+              )
+            : AppColors.surfaceOf(brightness),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: isCompleted
-              ? AppColors.success.withOpacity(0.3)
-              : Theme.of(context).dividerColor,
+              ? AppColors.success.withOpacity(0.35)
+              : AppColors.borderOf(brightness),
         ),
+        boxShadow: AppColors.cardShadow(isDark: brightness == Brightness.dark),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(mission.icon, style: const TextStyle(fontSize: 26)),
-              const SizedBox(width: 10),
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: tint.withOpacity(0.13),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                alignment: Alignment.center,
+                child: Text(mission.icon, style: const TextStyle(fontSize: 26)),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(mission.title,
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                    Text(mission.description,
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      mission.title,
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(mission.description, style: theme.textTheme.bodySmall),
                   ],
                 ),
               ),
-              if (isCompleted)
-                const Icon(Icons.check_circle, color: AppColors.success, size: 22),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: tint.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isCompleted) ...[
+                      Icon(Icons.check_circle_rounded, size: 12, color: tint),
+                      const SizedBox(width: 3),
+                    ],
+                    Text(
+                      status,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: tint,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           if (_loadingProgress)
-            const LinearProgressIndicator(minHeight: 6)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: const LinearProgressIndicator(minHeight: 8),
+            )
           else
             ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: ratio,
-                minHeight: 6,
-                backgroundColor: AppColors.primary.withOpacity(0.12),
-                valueColor: AlwaysStoppedAnimation(
-                  isCompleted ? AppColors.success : AppColors.primary,
+              borderRadius: BorderRadius.circular(8),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: ratio),
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, _) => LinearProgressIndicator(
+                  value: value,
+                  minHeight: 8,
+                  backgroundColor: tint.withOpacity(0.14),
+                  valueColor: AlwaysStoppedAnimation(tint),
                 ),
               ),
             ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -165,27 +335,32 @@ class _MissionCardState extends ConsumerState<_MissionCard> {
                 mission.type == MissionType.distance
                     ? '${_formatDistanceShort(progress)} / ${mission.unitLabel}'
                     : '${progress.toInt()} / ${mission.unitLabel}',
-                style: Theme.of(context).textTheme.labelMedium,
+                style: theme.textTheme.labelMedium,
               ),
-              Text('+${mission.rewardXp} XP',
-                  style: const TextStyle(
-                      color: AppColors.primaryDark, fontWeight: FontWeight.w600, fontSize: 12)),
+              Row(
+                children: [
+                  Icon(Icons.bolt_rounded,
+                      size: 14, color: AppColors.primaryTextOf(brightness)),
+                  Text(
+                    '+${mission.rewardXp} XP',
+                    style: TextStyle(
+                      color: AppColors.primaryTextOf(brightness),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
           if (canClaim) ...[
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _claiming ? null : _claim,
-                child: _claiming
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Nhận thưởng'),
-              ),
+            const SizedBox(height: 14),
+            GradientButton(
+              label: 'Nhận thưởng',
+              icon: Icons.card_giftcard_rounded,
+              height: 48,
+              isLoading: _claiming,
+              onPressed: _claiming ? null : _claim,
             ),
           ],
         ],
@@ -222,21 +397,19 @@ class _EmptyMissionsCardState extends ConsumerState<_EmptyMissionsCard> {
       title: 'Chưa có Nhiệm vụ nào trong hệ thống.',
       subtitle:
           'Thao tác chỉ cần làm 1 lần cho cả app (tạm thời thay cho Admin Dashboard).',
-      action: ElevatedButton(
-        onPressed: _seeding
-            ? null
-            : () async {
-                setState(() => _seeding = true);
-                await ref.read(missionServiceProvider).seedDefaultMissions();
-                if (mounted) setState(() => _seeding = false);
-              },
-        child: _seeding
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              )
-            : const Text('Khởi tạo Nhiệm vụ mặc định'),
+      action: SizedBox(
+        width: 260,
+        child: GradientButton(
+          label: 'Khởi tạo Nhiệm vụ mặc định',
+          isLoading: _seeding,
+          onPressed: _seeding
+              ? null
+              : () async {
+                  setState(() => _seeding = true);
+                  await ref.read(missionServiceProvider).seedDefaultMissions();
+                  if (mounted) setState(() => _seeding = false);
+                },
+        ),
       ),
     );
   }

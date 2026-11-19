@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/gradient_button.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../widgets/auth_header.dart';
 
 class ForgotPasswordPage extends ConsumerStatefulWidget {
   const ForgotPasswordPage({super.key});
 
   @override
-  ConsumerState<ForgotPasswordPage> createState() =>
-      _ForgotPasswordPageState();
+  ConsumerState<ForgotPasswordPage> createState() => _ForgotPasswordPageState();
 }
 
 class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
@@ -47,11 +48,30 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     final isLoading = authState.isLoading;
 
     return Scaffold(
-      appBar: AppBar(),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: _emailSent ? _buildSuccessView(context) : _buildFormView(isLoading),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AuthHeader(
+              icon: _emailSent
+                  ? Icons.mark_email_read_outlined
+                  : Icons.lock_reset_outlined,
+              title: _emailSent ? 'Đã gửi email!' : 'Quên mật khẩu?',
+              subtitle: _emailSent
+                  ? 'Hãy kiểm tra hộp thư để tiếp tục.'
+                  : 'Nhập email của bạn, chúng tôi sẽ gửi link đặt lại mật khẩu.',
+              showBack: true,
+            ),
+            AuthFormCard(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: _emailSent
+                    ? _buildSuccessView(context)
+                    : _buildFormView(isLoading),
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom),
+          ],
         ),
       ),
     );
@@ -61,27 +81,16 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     return Form(
       key: _formKey,
       child: Column(
+        key: const ValueKey('form'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.lock_reset_outlined, size: 48, color: AppColors.primary),
-          const SizedBox(height: 16),
-          Text(
-            'Quên mật khẩu?',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Nhập email của bạn, chúng tôi sẽ gửi link đặt lại mật khẩu.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondaryLight,
-                ),
-          ),
-          const SizedBox(height: 32),
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (_) {
+              if (!isLoading) _handleSubmit();
+            },
             decoration: const InputDecoration(
               labelText: 'Email',
               prefixIcon: Icon(Icons.email_outlined),
@@ -96,19 +105,11 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
               return null;
             },
           ),
-          const SizedBox(height: 24),
-          ElevatedButton(
+          const SizedBox(height: 22),
+          GradientButton(
+            label: 'Gửi link đặt lại mật khẩu',
+            isLoading: isLoading,
             onPressed: isLoading ? null : _handleSubmit,
-            child: isLoading
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text('Gửi link đặt lại mật khẩu'),
           ),
         ],
       ),
@@ -116,24 +117,31 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
   }
 
   Widget _buildSuccessView(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      key: const ValueKey('success'),
       children: [
-        Icon(Icons.mark_email_read_outlined, size: 64, color: AppColors.success),
+        Container(
+          width: 84,
+          height: 84,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.success.withOpacity(0.12),
+            border: Border.all(color: AppColors.success.withOpacity(0.3)),
+          ),
+          child: const Icon(Icons.check_rounded,
+              size: 44, color: AppColors.success),
+        ),
         const SizedBox(height: 16),
         Text(
-          'Đã gửi email!',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Kiểm tra hộp thư của ${_emailController.text.trim()} để đặt lại mật khẩu.',
+          'Kiểm tra hộp thư của\n${_emailController.text.trim()}\nđể đặt lại mật khẩu.',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondaryLight,
-              ),
+          style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+        ),
+        const SizedBox(height: 18),
+        TextButton(
+          onPressed: () => setState(() => _emailSent = false),
+          child: const Text('Gửi lại với email khác'),
         ),
       ],
     );
